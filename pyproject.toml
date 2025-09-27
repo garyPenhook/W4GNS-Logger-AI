@@ -38,6 +38,7 @@ ai = [
 dev = [
   "pytest>=8.2",
   "ruff>=0.6",
+  "tox>=4.16",
 ]
 
 [project.scripts]

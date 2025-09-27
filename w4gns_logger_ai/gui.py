@@ -9,17 +9,23 @@ Tabs:
 
 from __future__ import annotations
 
+import os
+import sys
 import threading
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from typing import Optional
 
-from .adif import dump_adif, load_adif
-from .ai_helper import evaluate_awards, summarize_qsos
-from .awards import compute_summary, filtered_qsos
-from .models import QSO, now_utc
-from .storage import (
+# Allow running this file directly by ensuring the project root is on sys.path
+if __package__ is None or __package__ == "":
+    sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+
+from w4gns_logger_ai.adif import dump_adif, load_adif
+from w4gns_logger_ai.ai_helper import evaluate_awards, summarize_qsos
+from w4gns_logger_ai.awards import compute_summary, filtered_qsos
+from w4gns_logger_ai.models import QSO, now_utc
+from w4gns_logger_ai.storage import (
     APP_NAME,
     add_qso,
     create_db_and_tables,
@@ -41,7 +47,7 @@ class LoggerGUI:
         create_db_and_tables()
 
         self.notebook = ttk.Notebook(root)
-        self.notebook.pack(fill=tk.BOTH, expand=True)
+        self.notebook.pack(fill="both", expand=True)
 
         self._build_log_tab()
         self._build_browse_tab()
@@ -58,9 +64,9 @@ class LoggerGUI:
 
         def add_field(label: str, width: int = 20) -> tk.Entry:
             nonlocal row
-            ttk.Label(frame, text=label).grid(row=row, column=0, sticky=tk.W, padx=6, pady=4)
+            ttk.Label(frame, text=label).grid(row=row, column=0, sticky="w", padx=6, pady=4)
             e = ttk.Entry(frame, width=width)
-            e.grid(row=row, column=1, sticky=tk.W, padx=6, pady=4)
+            e.grid(row=row, column=1, sticky="w", padx=6, pady=4)
             row += 1
             return e
 
@@ -75,13 +81,13 @@ class LoggerGUI:
         self.e_grid = add_field("Grid")
         self.e_country = add_field("Country")
 
-        ttk.Label(frame, text="Comment").grid(row=row, column=0, sticky=tk.NW, padx=6, pady=4)
+        ttk.Label(frame, text="Comment").grid(row=row, column=0, sticky="nw", padx=6, pady=4)
         self.t_comment = tk.Text(frame, width=40, height=4)
-        self.t_comment.grid(row=row, column=1, sticky=tk.W, padx=6, pady=4)
+        self.t_comment.grid(row=row, column=1, sticky="w", padx=6, pady=4)
         row += 1
 
         btn = ttk.Button(frame, text="Save QSO", command=self._save_qso)
-        btn.grid(row=row, column=1, sticky=tk.W, padx=6, pady=8)
+        btn.grid(row=row, column=1, sticky="w", padx=6, pady=8)
 
     def _save_qso(self) -> None:
         """Validate and persist the QSO entered in the Log tab."""
@@ -121,26 +127,22 @@ class LoggerGUI:
         self.notebook.add(frame, text="Browse")
 
         filters = ttk.Frame(frame)
-        filters.pack(fill=tk.X, padx=8, pady=6)
+        filters.pack(fill="x", padx=8, pady=6)
 
-        ttk.Label(filters, text="Call contains:").pack(side=tk.LEFT)
+        ttk.Label(filters, text="Call contains:").pack(side="left")
         self.f_call = ttk.Entry(filters, width=16)
-        self.f_call.pack(side=tk.LEFT, padx=6)
+        self.f_call.pack(side="left", padx=6)
 
-        ttk.Label(filters, text="Band:").pack(side=tk.LEFT)
+        ttk.Label(filters, text="Band:").pack(side="left")
         self.f_band = ttk.Entry(filters, width=10)
-        self.f_band.pack(side=tk.LEFT, padx=6)
+        self.f_band.pack(side="left", padx=6)
 
-        ttk.Label(filters, text="Mode:").pack(side=tk.LEFT)
+        ttk.Label(filters, text="Mode:").pack(side="left")
         self.f_mode = ttk.Entry(filters, width=10)
-        self.f_mode.pack(side=tk.LEFT, padx=6)
+        self.f_mode.pack(side="left", padx=6)
 
-        ttk.Button(filters, text="Refresh", command=self._refresh_table).pack(
-            side=tk.LEFT, padx=6
-        )
-        ttk.Button(filters, text="Delete selected", command=self._delete_selected).pack(
-            side=tk.LEFT, padx=6
-        )
+        ttk.Button(filters, text="Refresh", command=self._refresh_table).pack(side="left", padx=6)
+        ttk.Button(filters, text="Delete selected", command=self._delete_selected).pack(side="left", padx=6)
 
         self.tree = ttk.Treeview(
             frame,
@@ -152,7 +154,7 @@ class LoggerGUI:
             self.tree.column(
                 self.tree["columns"][i], width=110 if col != "Comment" else 260
             )
-        self.tree.pack(fill=tk.BOTH, expand=True, padx=8, pady=6)
+        self.tree.pack(fill="both", expand=True, padx=8, pady=6)
 
         self._refresh_table()
 
@@ -195,35 +197,31 @@ class LoggerGUI:
         self.notebook.add(frame, text="Awards")
 
         top = ttk.Frame(frame)
-        top.pack(fill=tk.X, padx=8, pady=6)
+        top.pack(fill="x", padx=8, pady=6)
 
-        ttk.Label(top, text="Band:").pack(side=tk.LEFT)
+        ttk.Label(top, text="Band:").pack(side="left")
         self.a_band = ttk.Entry(top, width=10)
-        self.a_band.pack(side=tk.LEFT, padx=6)
+        self.a_band.pack(side="left", padx=6)
 
-        ttk.Label(top, text="Mode:").pack(side=tk.LEFT)
+        ttk.Label(top, text="Mode:").pack(side="left")
         self.a_mode = ttk.Entry(top, width=10)
-        self.a_mode.pack(side=tk.LEFT, padx=6)
+        self.a_mode.pack(side="left", padx=6)
 
-        ttk.Button(top, text="Refresh", command=self._awards_refresh).pack(
-            side=tk.LEFT, padx=6
-        )
+        ttk.Button(top, text="Refresh", command=self._awards_refresh).pack(side="left", padx=6)
 
         self.awards_text = tk.Text(frame, height=10)
-        self.awards_text.pack(fill=tk.BOTH, expand=False, padx=8, pady=4)
+        self.awards_text.pack(fill="both", expand=False, padx=8, pady=4)
 
         # Evaluate section
         eval_frame = ttk.Frame(frame)
-        eval_frame.pack(fill=tk.X, padx=8, pady=6)
-        ttk.Label(eval_frame, text="Goals:").pack(side=tk.LEFT)
+        eval_frame.pack(fill="x", padx=8, pady=6)
+        ttk.Label(eval_frame, text="Goals:").pack(side="left")
         self.e_goals = ttk.Entry(eval_frame, width=50)
-        self.e_goals.pack(side=tk.LEFT, padx=6)
-        ttk.Button(eval_frame, text="Evaluate", command=self._awards_eval).pack(
-            side=tk.LEFT, padx=6
-        )
+        self.e_goals.pack(side="left", padx=6)
+        ttk.Button(eval_frame, text="Evaluate", command=self._awards_eval).pack(side="left", padx=6)
 
         self.eval_text = tk.Text(frame, height=10)
-        self.eval_text.pack(fill=tk.BOTH, expand=True, padx=8, pady=4)
+        self.eval_text.pack(fill="both", expand=True, padx=8, pady=4)
 
         self._awards_refresh()
 
@@ -272,17 +270,17 @@ class LoggerGUI:
         frame = ttk.Frame(self.notebook)
         self.notebook.add(frame, text="Tools")
 
-        ttk.Label(frame, text=f"Database: {get_db_path()}").pack(anchor=tk.W, padx=8, pady=6)
+        ttk.Label(frame, text=f"Database: {get_db_path()}").pack(anchor="w", padx=8, pady=6)
 
         btns = ttk.Frame(frame)
-        btns.pack(fill=tk.X, padx=8, pady=6)
+        btns.pack(fill="x", padx=8, pady=6)
 
-        ttk.Button(btns, text="Export ADIF", command=self._export_adif).pack(side=tk.LEFT, padx=6)
-        ttk.Button(btns, text="Import ADIF", command=self._import_adif).pack(side=tk.LEFT, padx=6)
-        ttk.Button(btns, text="Summarize QSOs", command=self._summarize).pack(side=tk.LEFT, padx=6)
+        ttk.Button(btns, text="Export ADIF", command=self._export_adif).pack(side="left", padx=6)
+        ttk.Button(btns, text="Import ADIF", command=self._import_adif).pack(side="left", padx=6)
+        ttk.Button(btns, text="Summarize QSOs", command=self._summarize).pack(side="left", padx=6)
 
         self.tools_text = tk.Text(frame, height=12)
-        self.tools_text.pack(fill=tk.BOTH, expand=True, padx=8, pady=6)
+        self.tools_text.pack(fill="both", expand=True, padx=8, pady=6)
 
     def _export_adif(self) -> None:
         """Export recent QSOs to an ADIF file chosen by the user."""

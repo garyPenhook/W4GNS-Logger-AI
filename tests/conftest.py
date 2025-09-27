@@ -1,13 +1,40 @@
 import pytest
 
-from w4gns_logger_ai.storage import DB_ENV_VAR, create_db_and_tables
+
+@pytest.fixture
+def sample_qso():
+    """Create a sample QSO for testing."""
+    from datetime import datetime
+    from w4gns_logger_ai.models import QSO
+
+    return QSO(
+        call="K1ABC",
+        start_at=datetime(2024, 7, 4, 12, 0, 0),
+        band="20m",
+        mode="SSB",
+        freq_mhz=14.250,
+        rst_sent="59",
+        rst_rcvd="59",
+        name="Test",
+        qth="Test City",
+        grid="FN42",
+        country="USA",
+        comment="Test QSO"
+    )
 
 
-@pytest.fixture(autouse=True)
-def temp_db(tmp_path, monkeypatch):
-    # Use a temp DB per test session
+@pytest.fixture
+def temp_db(tmp_path):
+    """Create a temporary database for testing."""
+    import os
     db_path = tmp_path / "test.sqlite3"
-    monkeypatch.setenv(DB_ENV_VAR, str(db_path))
+    os.environ["W4GNS_DB_PATH"] = str(db_path)
+
+    from w4gns_logger_ai.storage import create_db_and_tables
     create_db_and_tables()
-    yield
-    # no explicit teardown needed; file is in tmp_path
+
+    yield db_path
+
+    # Cleanup
+    if "W4GNS_DB_PATH" in os.environ:
+        del os.environ["W4GNS_DB_PATH"]

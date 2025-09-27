@@ -1,23 +1,64 @@
 import json
-from datetime import datetime
+import tempfile
+from pathlib import Path
 
-from w4gns_logger_ai.awards import CONFIG_ENV_VAR, compute_summary, suggest_awards
-from w4gns_logger_ai.models import QSO
+from w4gns_logger_ai.awards import get_award_thresholds
 
 
-def test_awards_threshold_override(tmp_path, monkeypatch):
-    # Create a custom config threshold file
-    cfg = tmp_path / "awards.json"
-    cfg.write_text(json.dumps({"DXCC": 2, "VUCC": 2}), encoding="utf-8")
-    monkeypatch.setenv(CONFIG_ENV_VAR, str(cfg))
+def test_default_thresholds():
+    """Test that default award thresholds are loaded when no config exists."""
+    thresholds = get_award_thresholds()
+    assert "DXCC" in thresholds
+    assert "VUCC" in thresholds
+    assert thresholds["DXCC"] == 100
+    assert thresholds["VUCC"] == 100
 
-    # Make 2 unique countries and 2 unique grids
-    qsos = [
-        QSO(call="K1AAA", start_at=datetime(2024, 1, 1), country="USA", grid="FN42"),
-        QSO(call="DL1BBB", start_at=datetime(2024, 1, 2), country="GERMANY", grid="JO62"),
-    ]
-    s = compute_summary(qsos)
-    suggestions = suggest_awards(s)
-    # With thresholds at 2, both achievements should be detected
-    assert any("DXCC achieved" in x for x in suggestions)
-    assert any("VUCC achieved" in x for x in suggestions)
+
+def test_custom_thresholds(tmp_path, monkeypatch):
+    """Test loading custom thresholds from config file."""
+    # Create a custom config file
+    config_path = tmp_path / "awards.json"
+    custom_config = {
+        "DXCC": 150,
+        "VUCC": 75,
+        "CUSTOM_AWARD": 50
+    }
+
+    with open(config_path, "w") as f:
+        json.dump(custom_config, f)
+
+    # Mock the environment variable to point to our test config
+    monkeypatch.setenv("W4GNS_AWARDS_CONFIG", str(config_path))
+
+    # Clear any cached config by reimporting
+    import importlib
+    import w4gns_logger_ai.awards
+    importlib.reload(w4gns_logger_ai.awards)
+
+    thresholds = w4gns_logger_ai.awards.get_award_thresholds()
+
+    assert thresholds["DXCC"] == 150
+    assert thresholds["VUCC"] == 75
+    assert thresholds["CUSTOM_AWARD"] == 50
+
+
+def test_malformed_config_fallback(tmp_path, monkeypatch):
+    """Test that malformed config files fall back to defaults."""
+    # Create a malformed config file
+    config_path = tmp_path / "bad_awards.json"
+    with open(config_path, "w") as f:
+        f.write("{ invalid json }")
+
+    # Mock the environment variable
+    monkeypatch.setenv("W4GNS_AWARDS_CONFIG", str(config_path))
+
+    # Clear any cached config
+    import importlib
+    import w4gns_logger_ai.awards
+    importlib.reload(w4gns_logger_ai.awards)
+
+    thresholds = w4gns_logger_ai.awards.get_award_thresholds()
+
+    # Should fall back to defaults
+    assert thresholds["DXCC"] == 100
+    assert thresholds["VUCC"] == 100

@@ -101,6 +101,8 @@ def get_award_thresholds() -> Dict[str, int]:
     JSON shape example:
     { "DXCC": 125, "VUCC": 75, "MY_CUSTOM": 50 }
     Unknown keys are preserved for future use.
+
+    Returns defaults if config file cannot be read or parsed.
     """
     p = _config_path()
     data: Dict[str, int] = dict(DEFAULT_AWARD_THRESHOLDS)
@@ -112,42 +114,52 @@ def get_award_thresholds() -> Dict[str, int]:
                     for k, v in raw.items():
                         if isinstance(k, str) and isinstance(v, int) and v > 0:
                             data[k.upper()] = v
-    except Exception:
+    except (IOError, OSError, json.JSONDecodeError, ValueError, TypeError):
         # Ignore malformed configs; fall back to defaults
         pass
     return data
 
 
 def suggest_awards(summary: Dict[str, object]) -> List[str]:
-    """Generate simple, readable suggestions based on thresholds and current counts."""
-    thresholds = get_award_thresholds()
-    suggestions: List[str] = []
-    countries = int(summary.get("unique_countries", 0) or 0)
-    grids = int(summary.get("unique_grids", 0) or 0)
+    """Generate simple, readable suggestions based on thresholds and current counts.
 
-    dxcc_needed = thresholds.get("DXCC", DEFAULT_AWARD_THRESHOLDS["DXCC"])
-    vucc_needed = thresholds.get("VUCC", DEFAULT_AWARD_THRESHOLDS["VUCC"])
+    Handles missing or invalid summary data gracefully.
+    """
+    try:
+        thresholds = get_award_thresholds()
+        suggestions: List[str] = []
+        countries = int(summary.get("unique_countries", 0) or 0)
+        grids = int(summary.get("unique_grids", 0) or 0)
 
-    if countries >= dxcc_needed:
-        suggestions.append(f"DXCC achieved: {countries} unique countries")
-    elif countries >= int(0.9 * dxcc_needed):
-        remaining = dxcc_needed - countries
-        suggestions.append(f"DXCC close: {countries} countries (need {remaining} more)")
+        dxcc_needed = thresholds.get("DXCC", DEFAULT_AWARD_THRESHOLDS["DXCC"])
+        vucc_needed = thresholds.get("VUCC", DEFAULT_AWARD_THRESHOLDS["VUCC"])
 
-    if grids >= vucc_needed:
-        suggestions.append(f"VUCC achieved: {grids} unique grids")
-    elif grids >= int(0.9 * vucc_needed):
-        remaining = vucc_needed - grids
-        suggestions.append(f"VUCC close: {grids} grids (need {remaining} more)")
+        if countries >= dxcc_needed:
+            suggestions.append(f"DXCC achieved: {countries} unique countries")
+        elif countries >= int(0.9 * dxcc_needed):
+            remaining = dxcc_needed - countries
+            suggestions.append(f"DXCC close: {countries} countries (need {remaining} more)")
 
-    # Band-specific VUCC hints
-    gpb = summary.get("grids_per_band", {}) or {}
-    if isinstance(gpb, dict):
-        for band, count in sorted(gpb.items()):
-            c = int(count or 0)
-            if c >= 50:
-                suggestions.append(f"Strong grid count on {band or 'unknown'}: {c}")
-    return suggestions
+        if grids >= vucc_needed:
+            suggestions.append(f"VUCC achieved: {grids} unique grids")
+        elif grids >= int(0.9 * vucc_needed):
+            remaining = vucc_needed - grids
+            suggestions.append(f"VUCC close: {grids} grids (need {remaining} more)")
+
+        # Band-specific VUCC hints
+        gpb = summary.get("grids_per_band", {}) or {}
+        if isinstance(gpb, dict):
+            for band, count in sorted(gpb.items()):
+                try:
+                    c = int(count or 0)
+                    if c >= 50:
+                        suggestions.append(f"Strong grid count on {band or 'unknown'}: {c}")
+                except (ValueError, TypeError):
+                    continue
+        return suggestions
+    except Exception:
+        # Return empty list if anything goes wrong
+        return []
 
 
 def filtered_qsos(

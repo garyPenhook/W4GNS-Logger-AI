@@ -1,12 +1,13 @@
-"""AI-powered helpers for summaries and awards evaluation.
+"""AI-powered helper functions for summarizing QSOs and evaluating awards progress.
 
-These helpers use OpenAI if an API key is present and the optional 'ai' extras
-are installed. If not, they degrade gracefully to fast, local fallbacks.
+When OpenAI is configured via OPENAI_API_KEY, we use GPT models for enhanced insights.
+Otherwise, we fall back to deterministic, local-only approaches.
 """
 
 from __future__ import annotations
 
-from typing import Iterable
+import os
+from typing import Iterable, List
 
 from .awards import compute_summary, suggest_awards
 from .models import QSO
@@ -37,14 +38,12 @@ def summarize_qsos(qsos: Iterable[QSO], *, model: str = "gpt-4o-mini") -> str:
     The response is intentionally short and actionable for operators.
     """
     try:
-        import os
-
-        from openai import OpenAI  # type: ignore
+        import openai
 
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             return _fallback_summary(list(qsos))
-        client = OpenAI(api_key=api_key)
+        client = openai.OpenAI(api_key=api_key)
         # Build concise bullet list of the most recent QSOs
         lines = []
         for q in list(qsos)[:50]:
@@ -68,7 +67,7 @@ def summarize_qsos(qsos: Iterable[QSO], *, model: str = "gpt-4o-mini") -> str:
             max_tokens=200,
         )
         return resp.choices[0].message.content.strip()
-    except Exception:
+    except (ImportError, AttributeError, ValueError, ConnectionError, TimeoutError):
         # Any failure falls back to local summary
         return _fallback_summary(list(qsos))
 
@@ -101,14 +100,12 @@ def evaluate_awards(
         base_text.append("Suggestions: none yet — keep logging!")
 
     try:
-        import os
-
-        from openai import OpenAI  # type: ignore
+        import openai
 
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             return "\n".join(base_text)
-        client = OpenAI(api_key=api_key)
+        client = openai.OpenAI(api_key=api_key)
         # Keep content compact; include deterministic baseline
         content_lines = base_text + [
             "",
@@ -128,5 +125,5 @@ def evaluate_awards(
             max_tokens=300,
         )
         return resp.choices[0].message.content.strip()
-    except Exception:
+    except (ImportError, AttributeError, ValueError, ConnectionError, TimeoutError):
         return "\n".join(base_text)

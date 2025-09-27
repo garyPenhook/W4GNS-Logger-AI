@@ -45,74 +45,128 @@ _engine = None
 
 
 def get_engine():
-    """Create (once) and return the SQLAlchemy engine bound to our SQLite DB."""
+    """Create (once) and return the SQLAlchemy engine bound to our SQLite DB.
+
+    Raises RuntimeError if database creation fails.
+    """
     global _engine
     if _engine is None:
-        db_path = get_db_path()
-        url = f"sqlite:///{db_path}"
-        _engine = create_engine(url, echo=False)
+        try:
+            db_path = get_db_path()
+            url = f"sqlite:///{db_path}"
+            _engine = create_engine(url, echo=False)
+        except Exception as e:
+            raise RuntimeError(f"Failed to create database engine: {e}") from e
     return _engine
 
 
 def create_db_and_tables() -> Path:
-    """Create all tables for the current metadata if they don't exist yet."""
-    engine = get_engine()
-    SQLModel.metadata.create_all(engine)
-    return get_db_path()
+    """Create all tables for the current metadata if they don't exist yet.
+
+    Raises RuntimeError if table creation fails.
+    """
+    try:
+        engine = get_engine()
+        SQLModel.metadata.create_all(engine)
+        return get_db_path()
+    except Exception as e:
+        raise RuntimeError(f"Failed to create database tables: {e}") from e
 
 
 @contextmanager
 def session_scope():
-    """Context manager yielding a SQLModel Session bound to our engine."""
-    with Session(get_engine()) as session:
+    """Context manager yielding a SQLModel Session bound to our engine.
+
+    Automatically handles session cleanup and rollback on errors.
+    """
+    session = None
+    try:
+        session = Session(get_engine())
         yield session
+    except Exception:
+        if session:
+            session.rollback()
+        raise
+    finally:
+        if session:
+            session.close()
 
 
 # CRUD helpers
 
 def add_qso(qso: QSO) -> QSO:
-    """Persist a new QSO and return it refreshed with its database id."""
-    with session_scope() as session:
-        session.add(qso)
-        session.commit()
-        session.refresh(qso)
-        return qso
+    """Persist a new QSO and return it refreshed with its database id.
+
+    Raises RuntimeError if the QSO cannot be saved.
+    """
+    try:
+        with session_scope() as session:
+            session.add(qso)
+            session.commit()
+            session.refresh(qso)
+            return qso
+    except Exception as e:
+        raise RuntimeError(f"Failed to save QSO: {e}") from e
 
 
 def get_qso(qso_id: int) -> Optional[QSO]:
-    """Fetch a QSO by primary key, or None if missing."""
-    with session_scope() as session:
-        return session.get(QSO, qso_id)
+    """Fetch a QSO by primary key, or None if missing.
+
+    Raises RuntimeError if database query fails.
+    """
+    try:
+        with session_scope() as session:
+            return session.get(QSO, qso_id)
+    except Exception as e:
+        raise RuntimeError(f"Failed to retrieve QSO {qso_id}: {e}") from e
 
 
 def list_qsos(limit: int = 100, call: Optional[str] = None) -> List[QSO]:
-    """Return recent QSOs, optionally filtering by callsign substring."""
-    with session_scope() as session:
-        stmt = select(QSO)
-        if call:
-            stmt = stmt.where(QSO.call.ilike(f"%{call}%"))
-        stmt = stmt.order_by(QSO.start_at.desc()).limit(limit)
-        return list(session.exec(stmt))
+    """Return recent QSOs, optionally filtering by callsign substring.
+
+    Raises RuntimeError if database query fails.
+    """
+    try:
+        with session_scope() as session:
+            stmt = select(QSO)
+            if call:
+                stmt = stmt.where(QSO.call.ilike(f"%{call}%"))
+            stmt = stmt.order_by(QSO.start_at.desc()).limit(limit)
+            return list(session.exec(stmt))
+    except Exception as e:
+        raise RuntimeError(f"Failed to list QSOs: {e}") from e
 
 
 def delete_qso(qso_id: int) -> bool:
-    """Delete a QSO by id, returning True if it existed and was removed."""
-    with session_scope() as session:
-        q = session.get(QSO, qso_id)
-        if not q:
-            return False
-        session.delete(q)
-        session.commit()
-        return True
+    """Delete a QSO by id, returning True if it existed and was removed.
+
+    Raises RuntimeError if database operation fails.
+    """
+    try:
+        with session_scope() as session:
+            q = session.get(QSO, qso_id)
+            if not q:
+                return False
+            session.delete(q)
+            session.commit()
+            return True
+    except Exception as e:
+        raise RuntimeError(f"Failed to delete QSO {qso_id}: {e}") from e
 
 
 def bulk_add_qsos(qsos: Iterable[QSO]) -> int:
-    """Insert many QSOs at once, returning how many were provided."""
-    items = list(qsos)
-    with session_scope() as session:
-        session.add_all(items)
-        session.commit()
-        return len(items)
+    """Insert many QSOs at once, returning how many were provided.
+
+    Raises RuntimeError if bulk insert fails.
+    """
+    try:
+        items = list(qsos)
+        with session_scope() as session:
+            session.add_all(items)
+            session.commit()
+            return len(items)
+    except Exception as e:
+        raise RuntimeError(f"Failed to bulk add QSOs: {e}") from e
 
 
 def search_qsos(
@@ -124,16 +178,21 @@ def search_qsos(
 ) -> List[QSO]:
     """Flexible search across common fields; values must match exactly
     except for `call`, which does a case-insensitive substring match.
+
+    Raises RuntimeError if database query fails.
     """
-    with session_scope() as session:
-        stmt = select(QSO)
-        if call:
-            stmt = stmt.where(QSO.call.ilike(f"%{call}%"))
-        if band:
-            stmt = stmt.where(QSO.band == band)
-        if mode:
-            stmt = stmt.where(QSO.mode == mode)
-        if grid:
-            stmt = stmt.where(QSO.grid == grid)
-        stmt = stmt.order_by(QSO.start_at.desc()).limit(limit)
-        return list(session.exec(stmt))
+    try:
+        with session_scope() as session:
+            stmt = select(QSO)
+            if call:
+                stmt = stmt.where(QSO.call.ilike(f"%{call}%"))
+            if band:
+                stmt = stmt.where(QSO.band == band)
+            if mode:
+                stmt = stmt.where(QSO.mode == mode)
+            if grid:
+                stmt = stmt.where(QSO.grid == grid)
+            stmt = stmt.order_by(QSO.start_at.desc()).limit(limit)
+            return list(session.exec(stmt))
+    except Exception as e:
+        raise RuntimeError(f"Failed to search QSOs: {e}") from e

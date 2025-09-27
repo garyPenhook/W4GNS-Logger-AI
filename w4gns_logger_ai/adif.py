@@ -85,44 +85,64 @@ def load_adif(text: str) -> List[QSO]:
     """Parse ADIF text into a list of QSO objects (best effort).
 
     Records without CALL or without both QSO_DATE and TIME_ON are skipped.
+    Invalid data is logged and skipped gracefully.
     """
     records: List[QSO] = []
     # Split by <EOR>
     for chunk in text.split("<EOR>"):
-        rec = _parse_adif_record(chunk)
-        if not rec:
+        try:
+            rec = _parse_adif_record(chunk)
+            if not rec:
+                continue
+            # Build QSO from fields
+            call = rec.get("CALL")
+            if not call:
+                continue
+            date = rec.get("QSO_DATE")
+            time = rec.get("TIME_ON")
+            dt = None
+            if date and time:
+                try:
+                    # yyyymmdd + hhmm[ss]
+                    if len(date) < 8 or len(time) < 4:
+                        continue  # Skip invalid date/time format
+                    y, m, d = int(date[0:4]), int(date[4:6]), int(date[6:8])
+                    hh, mm = int(time[0:2]), int(time[2:4])
+                    ss = int(time[4:6]) if len(time) >= 6 else 0
+                    dt = datetime(y, m, d, hh, mm, ss)
+                except (ValueError, IndexError) as e:
+                    # Skip records with invalid date/time
+                    continue
+            else:
+                # If missing, skip record
+                continue
+
+            # Parse frequency with error handling
+            freq_mhz = None
+            if rec.get("FREQ"):
+                try:
+                    freq_mhz = float(rec["FREQ"])
+                except (ValueError, TypeError):
+                    freq_mhz = None
+
+            q = QSO(
+                call=call,
+                start_at=dt,
+                band=rec.get("BAND"),
+                mode=rec.get("MODE"),
+                freq_mhz=freq_mhz,
+                rst_sent=rec.get("RST_SENT"),
+                rst_rcvd=rec.get("RST_RCVD"),
+                name=rec.get("NAME"),
+                qth=rec.get("QTH"),
+                grid=rec.get("GRIDSQUARE"),
+                country=rec.get("COUNTRY"),
+                comment=rec.get("COMMENT"),
+            )
+            records.append(q)
+        except Exception:
+            # Skip any record that causes unexpected errors
             continue
-        # Build QSO from fields
-        call = rec.get("CALL")
-        if not call:
-            continue
-        date = rec.get("QSO_DATE")
-        time = rec.get("TIME_ON")
-        dt = None
-        if date and time:
-            # yyyymmdd + hhmm[ss]
-            y, m, d = int(date[0:4]), int(date[4:6]), int(date[6:8])
-            hh, mm = int(time[0:2]), int(time[2:4])
-            ss = int(time[4:6]) if len(time) >= 6 else 0
-            dt = datetime(y, m, d, hh, mm, ss)
-        else:
-            # If missing, skip record
-            continue
-        q = QSO(
-            call=call,
-            start_at=dt,
-            band=rec.get("BAND"),
-            mode=rec.get("MODE"),
-            freq_mhz=float(rec["FREQ"]) if rec.get("FREQ") else None,
-            rst_sent=rec.get("RST_SENT"),
-            rst_rcvd=rec.get("RST_RCVD"),
-            name=rec.get("NAME"),
-            qth=rec.get("QTH"),
-            grid=rec.get("GRIDSQUARE"),
-            country=rec.get("COUNTRY"),
-            comment=rec.get("COMMENT"),
-        )
-        records.append(q)
     return records
 
 

@@ -13,9 +13,10 @@ import os
 import sys
 import threading
 import tkinter as tk
+from collections.abc import Callable
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
-from typing import Optional
+from typing import Any, Optional
 
 # Allow running this file directly by ensuring the project root is on sys.path
 if __package__ is None or __package__ == "":
@@ -90,7 +91,7 @@ class LoggerGUI:
         btn.grid(row=row, column=1, sticky="w", padx=6, pady=8)
 
     def _save_qso(self) -> None:
-        """Validate and persist the QSO entered in the Log tab."""
+        """Validate and persist the QSO entered into the Log tab."""
         call = (self.e_call.get() or "").strip().upper()
         if not call:
             messagebox.showwarning("Missing", "Callsign is required")
@@ -99,7 +100,7 @@ class LoggerGUI:
         def parse_float(s: str) -> Optional[float]:
             try:
                 return float(s)
-            except Exception:
+            except (ValueError, TypeError):
                 return None
 
         q = QSO(
@@ -251,18 +252,9 @@ class LoggerGUI:
         mode = self.a_mode.get() or None
         goals = self.e_goals.get() or None
         qsos = filtered_qsos(list_qsos(limit=10000), band=band, mode=mode)
-        self.eval_text.delete("1.0", tk.END)
-        self.eval_text.insert(tk.END, "Evaluating...\n")
-
-        def run():
-            try:
-                text = evaluate_awards(qsos, goals=goals)
-            except Exception as e:
-                text = f"Error: {e}"
-            self.eval_text.delete("1.0", tk.END)
-            self.eval_text.insert(tk.END, text)
-
-        threading.Thread(target=run, daemon=True).start()
+        self._run_in_thread(
+            self.eval_text, "Evaluating...\n", evaluate_awards, qsos, goals=goals
+        )
 
     # Tools tab
     def _build_tools_tab(self) -> None:
@@ -296,7 +288,7 @@ class LoggerGUI:
         try:
             Path(path).write_text(txt, encoding="utf-8")
             messagebox.showinfo("Exported", f"Wrote {len(qsos)} QSOs to {path}")
-        except Exception as e:
+        except (IOError, OSError, PermissionError) as e:
             messagebox.showerror("Error", str(e))
 
     def _import_adif(self) -> None:
@@ -315,24 +307,48 @@ class LoggerGUI:
                 add_qso(q)
             messagebox.showinfo("Imported", f"Imported {len(qsos)} QSOs from {path}")
             self._refresh_table()
-        except Exception as e:
+        except (IOError, OSError, PermissionError, ValueError) as e:
             messagebox.showerror("Error", str(e))
 
     def _summarize(self) -> None:
         """Summarize recent QSOs (AI-enabled) in the Tools tab text area."""
-        self.tools_text.delete("1.0", tk.END)
-        self.tools_text.insert(tk.END, "Summarizing...\n")
+        rows = list_qsos(limit=100)
+        self._run_in_thread(
+            self.tools_text, "Summarizing...\n", summarize_qsos, rows
+        )
 
-        def run():
+    def _run_in_thread(
+        self,
+        target_widget: tk.Text,
+        initial_message: str,
+        func: Callable[..., str],
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        """Run a function in a background thread and update a text widget safely.
+
+        Args:
+            target_widget: The tk.Text widget to update.
+            initial_message: The message to display while running.
+            func: The function to execute in the background.
+            *args: Positional arguments for func.
+            **kwargs: Keyword arguments for func.
+        """
+        target_widget.delete("1.0", tk.END)
+        target_widget.insert(tk.END, initial_message)
+
+        def worker() -> None:
             try:
-                rows = list_qsos(limit=100)
-                text = summarize_qsos(rows)
-            except Exception as e:
-                text = f"Error: {e}"
-            self.tools_text.delete("1.0", tk.END)
-            self.tools_text.insert(tk.END, text)
+                result = func(*args, **kwargs)
+            except (ValueError, IOError, OSError, RuntimeError) as e:
+                result = f"Error: {e}"
+            # Ensure UI updates occur on the main thread
+            def apply_result() -> None:
+                target_widget.delete("1.0", tk.END)
+                target_widget.insert(tk.END, result)
+            self.root.after(0, apply_result)
 
-        threading.Thread(target=run, daemon=True).start()
+        threading.Thread(target=worker, daemon=True).start()
 
 
 def main() -> None:
@@ -345,7 +361,7 @@ def main() -> None:
             style.theme_use("vista")
         elif "xpnative" in style.theme_names():
             style.theme_use("xpnative")
-    except Exception:
+    except tk.TclError:
         pass
     LoggerGUI(root)
     root.mainloop()

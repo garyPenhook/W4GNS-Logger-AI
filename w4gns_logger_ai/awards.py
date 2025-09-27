@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import json
+import os
 from collections import defaultdict
+from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Set
+
+from platformdirs import user_config_dir
 
 from .models import QSO
 
@@ -54,28 +59,65 @@ def compute_summary(qsos: Iterable[QSO]) -> Dict[str, object]:
     }
 
 
-# Heuristic award thresholds (approximate), can be refined later
-AWARD_THRESHOLDS = {
+# Default thresholds; can be overridden via config
+DEFAULT_AWARD_THRESHOLDS: Dict[str, int] = {
     "DXCC": 100,  # unique countries
     "VUCC": 100,  # unique grids (band-specific often)
 }
 
+CONFIG_ENV_VAR = "W4GNS_AWARDS_CONFIG"
+CONFIG_FILENAME = "awards.json"
+
+
+def _config_path() -> Path:
+    env = os.getenv(CONFIG_ENV_VAR)
+    if env:
+        return Path(env).expanduser()
+    cfg_dir = Path(user_config_dir(appname="W4GNS Logger AI", appauthor=False))
+    cfg_dir.mkdir(parents=True, exist_ok=True)
+    return cfg_dir / CONFIG_FILENAME
+
+
+def get_award_thresholds() -> Dict[str, int]:
+    """Load thresholds from JSON, overriding defaults.
+
+    JSON shape: { "DXCC": 125, "VUCC": 75, "MY_CUSTOM": 50 }
+    """
+    p = _config_path()
+    data: Dict[str, int] = dict(DEFAULT_AWARD_THRESHOLDS)
+    try:
+        if p.exists():
+            with p.open("r", encoding="utf-8") as f:
+                raw = json.load(f)
+                if isinstance(raw, dict):
+                    for k, v in raw.items():
+                        if isinstance(k, str) and isinstance(v, int) and v > 0:
+                            data[k.upper()] = v
+    except Exception:
+        # Ignore malformed configs; fall back to defaults
+        pass
+    return data
+
 
 def suggest_awards(summary: Dict[str, object]) -> List[str]:
+    thresholds = get_award_thresholds()
     suggestions: List[str] = []
     countries = int(summary.get("unique_countries", 0) or 0)
     grids = int(summary.get("unique_grids", 0) or 0)
 
-    if countries >= AWARD_THRESHOLDS["DXCC"]:
+    dxcc_needed = thresholds.get("DXCC", DEFAULT_AWARD_THRESHOLDS["DXCC"])
+    vucc_needed = thresholds.get("VUCC", DEFAULT_AWARD_THRESHOLDS["VUCC"])
+
+    if countries >= dxcc_needed:
         suggestions.append(f"DXCC achieved: {countries} unique countries")
-    elif countries >= int(0.9 * AWARD_THRESHOLDS["DXCC"]):
-        remaining = AWARD_THRESHOLDS["DXCC"] - countries
+    elif countries >= int(0.9 * dxcc_needed):
+        remaining = dxcc_needed - countries
         suggestions.append(f"DXCC close: {countries} countries (need {remaining} more)")
 
-    if grids >= AWARD_THRESHOLDS["VUCC"]:
+    if grids >= vucc_needed:
         suggestions.append(f"VUCC achieved: {grids} unique grids")
-    elif grids >= int(0.9 * AWARD_THRESHOLDS["VUCC"]):
-        remaining = AWARD_THRESHOLDS["VUCC"] - grids
+    elif grids >= int(0.9 * vucc_needed):
+        remaining = vucc_needed - grids
         suggestions.append(f"VUCC close: {grids} grids (need {remaining} more)")
 
     # Band-specific VUCC hints

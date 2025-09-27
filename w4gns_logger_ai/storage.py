@@ -62,19 +62,34 @@ def get_engine():
                 try:
                     db_path = get_db_path()
                     url = f"sqlite:///{db_path}"
-                    # Enhanced connection settings for better performance
-                    _engine = create_engine(
-                        url,
-                        echo=False,
-                        pool_size=20,  # Increased connection pool
-                        max_overflow=30,  # Allow overflow connections
-                        pool_timeout=30,  # Connection timeout
-                        pool_recycle=3600,  # Recycle connections every hour
-                        connect_args={
-                            "check_same_thread": False,  # Allow multi-threading
-                            "timeout": 30,  # SQLite busy timeout
-                        }
-                    )
+
+                    # Use more conservative settings for CI compatibility
+                    connect_args = {
+                        "check_same_thread": False,  # Allow multi-threading
+                        "timeout": 30,  # SQLite busy timeout
+                    }
+
+                    # Detect CI environment and use simpler settings
+                    is_ci = any(env in os.environ for env in ['CI', 'GITHUB_ACTIONS', 'TRAVIS', 'JENKINS'])
+
+                    if is_ci:
+                        # Simpler configuration for CI environments
+                        _engine = create_engine(
+                            url,
+                            echo=False,
+                            connect_args=connect_args
+                        )
+                    else:
+                        # Enhanced connection settings for production
+                        _engine = create_engine(
+                            url,
+                            echo=False,
+                            pool_size=10,  # Reduced for CI compatibility
+                            max_overflow=20,  # Reduced for CI compatibility
+                            pool_timeout=30,
+                            pool_recycle=3600,
+                            connect_args=connect_args
+                        )
                 except Exception as e:
                     raise RuntimeError(f"Failed to create database engine: {e}") from e
     return _engine

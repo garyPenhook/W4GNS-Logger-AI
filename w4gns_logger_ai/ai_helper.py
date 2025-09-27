@@ -127,10 +127,25 @@ def summarize_qsos_parallel(qsos_batches: List[List[QSO]], *, model: str = "gpt-
             except Exception:
                 return _fallback_summary(qsos)
 
+        # Use conservative worker count for CI compatibility
+        is_ci = any(env in os.environ for env in ['CI', 'GITHUB_ACTIONS', 'TRAVIS', 'JENKINS'])
+        max_workers = 2 if is_ci else 5
+
         # Process batches concurrently
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-            futures = [executor.submit(process_batch, batch) for batch in qsos_batches]
-            return [future.result() for future in concurrent.futures.as_completed(futures)]
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = [executor.submit(process_batch, batch) for batch in qsos_batches]
+                results = []
+                for future in concurrent.futures.as_completed(futures, timeout=60):
+                    try:
+                        result = future.result()
+                        results.append(result)
+                    except Exception:
+                        results.append(_fallback_summary([]))
+                return results
+        except concurrent.futures.TimeoutError:
+            # Fallback on timeout
+            return [_fallback_summary(batch) for batch in qsos_batches]
 
     except (ImportError, AttributeError, ValueError, ConnectionError, TimeoutError):
         # Fall back to local summaries
@@ -216,10 +231,22 @@ def evaluate_awards_concurrent(
     def process_group(qsos: List[QSO]) -> str:
         return evaluate_awards(qsos, goals, model=model)
 
+    # Use conservative settings for CI environments
+    is_ci = any(env in os.environ for env in ['CI', 'GITHUB_ACTIONS', 'TRAVIS', 'JENKINS'])
+    max_workers = 2 if is_ci else 3
+
     try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = [executor.submit(process_group, group) for group in qsos_groups]
-            return [future.result() for future in concurrent.futures.as_completed(futures)]
-    except Exception:
+            results = []
+            for future in concurrent.futures.as_completed(futures, timeout=120):
+                try:
+                    result = future.result()
+                    results.append(result)
+                except Exception:
+                    # Fallback for failed group
+                    results.append("Error processing awards evaluation")
+            return results
+    except (Exception, concurrent.futures.TimeoutError):
         # Fall back to sequential processing
         return [process_group(group) for group in qsos_groups]

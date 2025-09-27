@@ -166,8 +166,13 @@ def load_adif_parallel(text: str, max_workers: int = None) -> List[QSO]:
     if len(chunks) < 100:
         return load_adif(text)
 
+    # Use conservative worker count for CI compatibility
     if max_workers is None:
-        max_workers = min(32, (multiprocessing.cpu_count() or 1) + 4)
+        try:
+            max_workers = min(4, max(1, (multiprocessing.cpu_count() or 1)))
+        except (OSError, NotImplementedError):
+            # Some CI environments don't support cpu_count()
+            max_workers = 2
 
     records: List[QSO] = []
 
@@ -182,10 +187,10 @@ def load_adif_parallel(text: str, max_workers: int = None) -> List[QSO]:
             # Collect results as they complete
             for future in concurrent.futures.as_completed(future_to_chunk):
                 try:
-                    result = future.result()
+                    result = future.result(timeout=30)  # Add timeout for CI
                     if result is not None:
                         records.append(result)
-                except Exception:
+                except (Exception, concurrent.futures.TimeoutError):
                     # Skip failed chunks
                     continue
 

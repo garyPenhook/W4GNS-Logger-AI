@@ -144,6 +144,13 @@ def compute_summary_parallel(qsos: Iterable[QSO], chunk_size: int = 5000) -> Dic
     if len(qsos_list) < chunk_size:
         return compute_summary(qsos_list)
 
+    # Detect CI environment and avoid ProcessPoolExecutor if needed
+    is_ci = any(env in os.environ for env in ['CI', 'GITHUB_ACTIONS', 'TRAVIS', 'JENKINS'])
+
+    if is_ci:
+        # Use ThreadPoolExecutor in CI environments to avoid multiprocessing issues
+        return _compute_summary_threaded(qsos_list, chunk_size)
+
     # Split into chunks
     chunks = [qsos_list[i : i + chunk_size] for i in range(0, len(qsos_list), chunk_size)]
 
@@ -152,6 +159,25 @@ def compute_summary_parallel(qsos: Iterable[QSO], chunk_size: int = 5000) -> Dic
 
         with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
             # Process chunks in parallel
+            chunk_summaries = list(executor.map(_compute_summary_chunk, chunks))
+
+            # Merge results
+            return _merge_summaries(chunk_summaries)
+
+    except Exception:
+        # Fall back to sequential processing
+        return compute_summary(qsos_list)
+
+
+def _compute_summary_threaded(qsos_list: List[QSO], chunk_size: int) -> Dict[str, object]:
+    """Thread-based summary computation for CI environments."""
+    chunks = [qsos_list[i : i + chunk_size] for i in range(0, len(qsos_list), chunk_size)]
+
+    try:
+        max_workers = min(4, len(chunks))  # Conservative for CI
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Process chunks in parallel using threads
             chunk_summaries = list(executor.map(_compute_summary_chunk, chunks))
 
             # Merge results

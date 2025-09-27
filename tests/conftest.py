@@ -27,14 +27,23 @@ def sample_qso():
 def temp_db(tmp_path):
     """Create a temporary database for testing."""
     import os
+
+    # Store original value if it exists
+    original_db_path = os.environ.get("W4GNS_DB_PATH")
+
+    # Set temporary database path
     db_path = tmp_path / "test.sqlite3"
     os.environ["W4GNS_DB_PATH"] = str(db_path)
 
-    from w4gns_logger_ai.storage import create_db_and_tables
-    create_db_and_tables()
+    try:
+        from w4gns_logger_ai.storage import create_db_and_tables
+        create_db_and_tables()
 
-    yield db_path
+        yield db_path
 
-    # Cleanup
-    if "W4GNS_DB_PATH" in os.environ:
-        del os.environ["W4GNS_DB_PATH"]
+    finally:
+        # Cleanup - restore original value or remove if it wasn't set
+        if original_db_path:
+            os.environ["W4GNS_DB_PATH"] = original_db_path
+        elif "W4GNS_DB_PATH" in os.environ:
+            del os.environ["W4GNS_DB_PATH"]

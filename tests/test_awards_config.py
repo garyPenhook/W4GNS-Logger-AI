@@ -30,16 +30,25 @@ def test_custom_thresholds(tmp_path, monkeypatch):
     # Mock the environment variable to point to our test config
     monkeypatch.setenv("W4GNS_AWARDS_CONFIG", str(config_path))
 
-    # Clear any cached config by reimporting
+    # Clear any cached config by reimporting (CI-safe approach)
+    import sys
     import importlib
-    import w4gns_logger_ai.awards
-    importlib.reload(w4gns_logger_ai.awards)
 
-    thresholds = w4gns_logger_ai.awards.get_award_thresholds()
+    # Remove from cache if present
+    if 'w4gns_logger_ai.awards' in sys.modules:
+        del sys.modules['w4gns_logger_ai.awards']
 
-    assert thresholds["DXCC"] == 150
-    assert thresholds["VUCC"] == 75
-    assert thresholds["CUSTOM_AWARD"] == 50
+    try:
+        from w4gns_logger_ai.awards import get_award_thresholds
+        thresholds = get_award_thresholds()
+
+        assert thresholds["DXCC"] == 150
+        assert thresholds["VUCC"] == 75
+        assert thresholds["CUSTOM_AWARD"] == 50
+    finally:
+        # Cleanup: remove from cache again
+        if 'w4gns_logger_ai.awards' in sys.modules:
+            del sys.modules['w4gns_logger_ai.awards']
 
 
 def test_malformed_config_fallback(tmp_path, monkeypatch):
@@ -52,13 +61,19 @@ def test_malformed_config_fallback(tmp_path, monkeypatch):
     # Mock the environment variable
     monkeypatch.setenv("W4GNS_AWARDS_CONFIG", str(config_path))
 
-    # Clear any cached config
-    import importlib
-    import w4gns_logger_ai.awards
-    importlib.reload(w4gns_logger_ai.awards)
+    # Clear module cache (CI-safe approach)
+    import sys
+    if 'w4gns_logger_ai.awards' in sys.modules:
+        del sys.modules['w4gns_logger_ai.awards']
 
-    thresholds = w4gns_logger_ai.awards.get_award_thresholds()
+    try:
+        from w4gns_logger_ai.awards import get_award_thresholds
+        thresholds = get_award_thresholds()
 
-    # Should fall back to defaults
-    assert thresholds["DXCC"] == 100
-    assert thresholds["VUCC"] == 100
+        # Should fall back to defaults
+        assert thresholds["DXCC"] == 100
+        assert thresholds["VUCC"] == 100
+    finally:
+        # Cleanup
+        if 'w4gns_logger_ai.awards' in sys.modules:
+            del sys.modules['w4gns_logger_ai.awards']

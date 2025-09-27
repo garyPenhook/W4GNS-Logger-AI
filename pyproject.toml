@@ -17,6 +17,8 @@ classifiers = [
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "License :: OSI Approved :: MIT License",
   "Operating System :: OS Independent",
 ]
@@ -45,6 +47,10 @@ w4gns-gui = "w4gns_logger_ai.gui:main"
 [tool.pytest.ini_options]
 addopts = "-q"
 pythonpath = ["."]
+filterwarnings = [
+  "error::DeprecationWarning:w4gns_logger_ai",
+  "error::PendingDeprecationWarning:w4gns_logger_ai",
+]
 
 [tool.ruff]
 line-length = 100

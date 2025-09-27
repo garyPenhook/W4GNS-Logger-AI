@@ -4,6 +4,8 @@ on:
   push:
     branches: [ main ]
   pull_request:
+  schedule:
+    - cron: '0 9 * * 1'  # Mondays at 09:00 UTC
 
 jobs:
   test:
@@ -11,7 +13,10 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        python-version: ['3.12', '3.13']
+        python-version: ['3.12', '3.13', '3.14', '3.15-dev']
+        exclude:
+          - os: windows-latest
+            python-version: '3.15-dev'
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -21,6 +26,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
           cache: 'pip'
           cache-dependency-path: pyproject.toml
 

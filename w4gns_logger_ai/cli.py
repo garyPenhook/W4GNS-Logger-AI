@@ -218,20 +218,50 @@ def import_adif(
         readable=True,
         help="ADIF file to import",
     ),
+    parallel: bool = typer.Option(True, help="Use parallel processing for large files"),
+    batch_size: int = typer.Option(1000, help="Batch size for database operations"),
 ) -> None:
-    """Import QSOs from an ADIF file; callsigns are normalized to uppercase."""
+    """Import QSOs from an ADIF file; callsigns are normalized to uppercase.
+
+    Enhanced with parallel processing for improved performance on large files.
+    """
     try:
         _ensure_db()
+        console.print(f"Reading ADIF file: {src}")
         text = src.read_text(encoding="utf-8", errors="ignore")
-        qsos = load_adif(text)
+
+        # Use parallel ADIF processing if enabled
+        if parallel:
+            from w4gns_logger_ai.adif import load_adif_parallel
+            console.print("Using parallel ADIF processing...")
+            qsos = load_adif_parallel(text)
+        else:
+            qsos = load_adif(text)
+
+        if not qsos:
+            console.print("No valid QSOs found in file.")
+            return
+
+        console.print(f"Parsed {len(qsos)} QSOs")
+
         # Normalize callsigns
         for q in qsos:
             q.call = q.call.upper()
+
         count_before = len(list_qsos(limit=99999))
-        for q in qsos:
-            add_qso(q)
+
+        # Use parallel bulk insert for large datasets
+        if len(qsos) > 500:
+            from w4gns_logger_ai.storage import bulk_add_qsos_parallel
+            console.print(f"Using parallel bulk insert with batch size {batch_size}...")
+            bulk_add_qsos_parallel(qsos, batch_size=batch_size)
+        else:
+            for q in qsos:
+                add_qso(q)
+
         count_after = len(list_qsos(limit=99999))
-        console.print(f"Imported {len(qsos)} QSOs. Total now: {count_after} (was {count_before}).")
+        console.print(f"[green]Imported {len(qsos)} QSOs. Total now: {count_after} (was {count_before}).[/green]")
+
     except Exception as e:
         console.print(f"[red]Error importing ADIF: {e}[/red]")
         raise typer.Exit(1) from e

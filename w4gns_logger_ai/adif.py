@@ -2,10 +2,14 @@
 
 We support the most common fields used by this logger. The parser is intentionally
 simple and tolerant; it looks for <TAG:len>value pairs and splits on <EOR>.
+
+Multi-threaded processing is used for large ADIF files to improve performance.
 """
 
 from __future__ import annotations
 
+import concurrent.futures
+import multiprocessing
 from datetime import datetime
 from typing import Dict, Iterable, List
 
@@ -81,68 +85,137 @@ def _parse_adif_record(text: str) -> Dict[str, str]:
     return rec
 
 
+def _process_adif_chunk(chunk: str) -> QSO | None:
+    """Process a single ADIF record chunk into a QSO object.
+
+    This function is designed to be called from multiple threads/processes.
+    Returns None for invalid records.
+    """
+    try:
+        rec = _parse_adif_record(chunk)
+        if not rec:
+            return None
+
+        # Build QSO from fields
+        call = rec.get("CALL")
+        if not call:
+            return None
+
+        date = rec.get("QSO_DATE")
+        time = rec.get("TIME_ON")
+        dt = None
+        if date and time:
+            try:
+                # yyyymmdd + hhmm[ss]
+                if len(date) < 8 or len(time) < 4:
+                    return None  # Skip invalid date/time format
+                y, m, d = int(date[0:4]), int(date[4:6]), int(date[6:8])
+                hh, mm = int(time[0:2]), int(time[2:4])
+                ss = int(time[4:6]) if len(time) >= 6 else 0
+                dt = datetime(y, m, d, hh, mm, ss)
+            except (ValueError, IndexError):
+                # Skip records with invalid date/time
+                return None
+        else:
+            # If missing, skip record
+            return None
+
+        # Parse frequency with error handling
+        freq_mhz = None
+        if rec.get("FREQ"):
+            try:
+                freq_mhz = float(rec["FREQ"])
+            except (ValueError, TypeError):
+                freq_mhz = None
+
+        return QSO(
+            call=call,
+            start_at=dt,
+            band=rec.get("BAND"),
+            mode=rec.get("MODE"),
+            freq_mhz=freq_mhz,
+            rst_sent=rec.get("RST_SENT"),
+            rst_rcvd=rec.get("RST_RCVD"),
+            name=rec.get("NAME"),
+            qth=rec.get("QTH"),
+            grid=rec.get("GRIDSQUARE"),
+            country=rec.get("COUNTRY"),
+            comment=rec.get("COMMENT"),
+        )
+    except Exception:
+        # Skip any record that causes unexpected errors
+        return None
+
+
+def load_adif_parallel(text: str, max_workers: int = None) -> List[QSO]:
+    """Parse ADIF text using parallel processing for improved performance.
+
+    Uses ThreadPoolExecutor for I/O bound parsing operations.
+    Falls back to sequential processing for small files or on errors.
+
+    Args:
+        text: ADIF text content
+        max_workers: Maximum number of worker threads (defaults to CPU count)
+
+    Returns:
+        List of parsed QSO objects
+    """
+    chunks = [chunk.strip() for chunk in text.split("<EOR>") if chunk.strip()]
+
+    # Use sequential processing for small files
+    if len(chunks) < 100:
+        return load_adif(text)
+
+    if max_workers is None:
+        max_workers = min(32, (multiprocessing.cpu_count() or 1) + 4)
+
+    records: List[QSO] = []
+
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all chunks for parallel processing
+            future_to_chunk = {
+                executor.submit(_process_adif_chunk, chunk): chunk
+                for chunk in chunks
+            }
+
+            # Collect results as they complete
+            for future in concurrent.futures.as_completed(future_to_chunk):
+                try:
+                    result = future.result()
+                    if result is not None:
+                        records.append(result)
+                except Exception:
+                    # Skip failed chunks
+                    continue
+
+    except Exception:
+        # Fall back to sequential processing on any threading errors
+        return load_adif(text)
+
+    return records
+
+
 def load_adif(text: str) -> List[QSO]:
     """Parse ADIF text into a list of QSO objects (best effort).
 
     Records without CALL or without both QSO_DATE and TIME_ON are skipped.
     Invalid data is logged and skipped gracefully.
+
+    For large files, consider using load_adif_parallel() for better performance.
     """
+    chunks = text.split("<EOR>")
+
+    # Use parallel processing for large files
+    if len(chunks) > 500:
+        return load_adif_parallel(text)
+
     records: List[QSO] = []
-    # Split by <EOR>
-    for chunk in text.split("<EOR>"):
-        try:
-            rec = _parse_adif_record(chunk)
-            if not rec:
-                continue
-            # Build QSO from fields
-            call = rec.get("CALL")
-            if not call:
-                continue
-            date = rec.get("QSO_DATE")
-            time = rec.get("TIME_ON")
-            dt = None
-            if date and time:
-                try:
-                    # yyyymmdd + hhmm[ss]
-                    if len(date) < 8 or len(time) < 4:
-                        continue  # Skip invalid date/time format
-                    y, m, d = int(date[0:4]), int(date[4:6]), int(date[6:8])
-                    hh, mm = int(time[0:2]), int(time[2:4])
-                    ss = int(time[4:6]) if len(time) >= 6 else 0
-                    dt = datetime(y, m, d, hh, mm, ss)
-                except (ValueError, IndexError) as e:
-                    # Skip records with invalid date/time
-                    continue
-            else:
-                # If missing, skip record
-                continue
+    for chunk in chunks:
+        qso = _process_adif_chunk(chunk)
+        if qso is not None:
+            records.append(qso)
 
-            # Parse frequency with error handling
-            freq_mhz = None
-            if rec.get("FREQ"):
-                try:
-                    freq_mhz = float(rec["FREQ"])
-                except (ValueError, TypeError):
-                    freq_mhz = None
-
-            q = QSO(
-                call=call,
-                start_at=dt,
-                band=rec.get("BAND"),
-                mode=rec.get("MODE"),
-                freq_mhz=freq_mhz,
-                rst_sent=rec.get("RST_SENT"),
-                rst_rcvd=rec.get("RST_RCVD"),
-                name=rec.get("NAME"),
-                qth=rec.get("QTH"),
-                grid=rec.get("GRIDSQUARE"),
-                country=rec.get("COUNTRY"),
-                comment=rec.get("COMMENT"),
-            )
-            records.append(q)
-        except Exception:
-            # Skip any record that causes unexpected errors
-            continue
     return records
 
 

@@ -2,10 +2,13 @@
 
 When OpenAI is configured via OPENAI_API_KEY, we use GPT models for enhanced insights.
 Otherwise, we fall back to deterministic, local-only approaches.
+
+Enhanced with concurrent processing for improved performance.
 """
 
 from __future__ import annotations
 
+import concurrent.futures
 import os
 from typing import Iterable, List
 
@@ -72,6 +75,68 @@ def summarize_qsos(qsos: Iterable[QSO], *, model: str = "gpt-4o-mini") -> str:
         return _fallback_summary(list(qsos))
 
 
+def summarize_qsos_parallel(qsos_batches: List[List[QSO]], *, model: str = "gpt-4o-mini") -> List[str]:
+    """Summarize multiple batches of QSOs concurrently using OpenAI.
+
+    Processes multiple QSO batches in parallel for improved performance.
+    Each batch is summarized independently and results are combined.
+
+    Args:
+        qsos_batches: List of QSO batches to process
+        model: OpenAI model to use
+
+    Returns:
+        List of summary strings, one per batch
+    """
+    try:
+        import openai
+
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            return [_fallback_summary(batch) for batch in qsos_batches]
+
+        client = openai.OpenAI(api_key=api_key)
+
+        def process_batch(qsos: List[QSO]) -> str:
+            try:
+                # Build concise bullet list of QSOs
+                lines = []
+                for q in qsos[:50]:  # Limit per batch
+                    parts = [q.start_at.strftime("%Y-%m-%d %H:%MZ"), q.call]
+                    if q.band:
+                        parts.append(q.band)
+                    if q.mode:
+                        parts.append(q.mode)
+                    if q.grid:
+                        parts.append(q.grid)
+                    lines.append(" | ".join(parts))
+
+                prompt = (
+                    "You are an assistant for a ham radio QSO log. Summarize these QSOs "
+                    "into 2-4 short bullet points, highlighting bands, modes, notable DX, and patterns.\n\n"
+                    + "\n".join(lines)
+                )
+
+                resp = client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.2,
+                    max_tokens=200,
+                )
+                return resp.choices[0].message.content.strip()
+            except Exception:
+                return _fallback_summary(qsos)
+
+        # Process batches concurrently
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            futures = [executor.submit(process_batch, batch) for batch in qsos_batches]
+            return [future.result() for future in concurrent.futures.as_completed(futures)]
+
+    except (ImportError, AttributeError, ValueError, ConnectionError, TimeoutError):
+        # Fall back to local summaries
+        return [_fallback_summary(batch) for batch in qsos_batches]
+
+
 def evaluate_awards(
     qsos: Iterable[QSO],
     goals: str | None = None,
@@ -127,3 +192,34 @@ def evaluate_awards(
         return resp.choices[0].message.content.strip()
     except (ImportError, AttributeError, ValueError, ConnectionError, TimeoutError):
         return "\n".join(base_text)
+
+
+def evaluate_awards_concurrent(
+    qsos_groups: List[List[QSO]],
+    goals: str | None = None,
+    *,
+    model: str = "gpt-4o-mini",
+) -> List[str]:
+    """Evaluate awards progress for multiple QSO groups concurrently.
+
+    Processes multiple groups of QSOs in parallel for comprehensive analysis.
+    Useful for analyzing awards progress across different bands/modes simultaneously.
+
+    Args:
+        qsos_groups: List of QSO groups to analyze
+        goals: User's awards goals
+        model: OpenAI model to use
+
+    Returns:
+        List of evaluation results, one per group
+    """
+    def process_group(qsos: List[QSO]) -> str:
+        return evaluate_awards(qsos, goals, model=model)
+
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+            futures = [executor.submit(process_group, group) for group in qsos_groups]
+            return [future.result() for future in concurrent.futures.as_completed(futures)]
+    except Exception:
+        # Fall back to sequential processing
+        return [process_group(group) for group in qsos_groups]

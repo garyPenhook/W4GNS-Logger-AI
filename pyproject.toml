@@ -1,0 +1,53 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "w4gns-logger-ai"
+version = "0.1.0"
+description = "Ham radio QSO logger with ADIF import/export and optional AI-powered helpers"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+  { name = "W4GNS" }
+]
+license = { text = "MIT" }
+keywords = ["ham-radio", "amateur-radio", "ADIF", "logger", "QSO", "AI"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.12",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+]
+dependencies = [
+  "typer>=0.12",
+  "rich>=13.7",
+  "sqlmodel>=0.0.21",
+  "platformdirs>=4.2",
+]
+
+[project.optional-dependencies]
+# AI helpers are optional; install with: uv pip install -e .[ai]
+ai = [
+  "openai>=1.44",
+]
+# Dev tools and tests; install with: uv pip install -e .[dev]
+dev = [
+  "pytest>=8.2",
+  "ruff>=0.6",
+]
+
+[project.scripts]
+w4gns = "w4gns_logger_ai.cli:main"
+w4gns-gui = "w4gns_logger_ai.gui:main"
+
+[tool.pytest.ini_options]
+addopts = "-q"
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]

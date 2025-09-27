@@ -1,3 +1,9 @@
+"""AI-powered helpers for summaries and awards evaluation.
+
+These helpers use OpenAI if an API key is present and the optional 'ai' extras
+are installed. If not, they degrade gracefully to fast, local fallbacks.
+"""
+
 from __future__ import annotations
 
 from typing import Iterable
@@ -7,6 +13,10 @@ from .models import QSO
 
 
 def _fallback_summary(qsos: Iterable[QSO]) -> str:
+    """Produce a compact local summary when AI is unavailable.
+
+    Includes counts of QSOs, unique calls, bands, and modes.
+    """
     qsos = list(qsos)
     if not qsos:
         return "No QSOs to summarize."
@@ -21,9 +31,10 @@ def _fallback_summary(qsos: Iterable[QSO]) -> str:
 
 
 def summarize_qsos(qsos: Iterable[QSO], *, model: str = "gpt-4o-mini") -> str:
-    """Summarize QSOs using OpenAI if available, otherwise a simple fallback.
+    """Summarize recent QSOs using OpenAI, with a robust local fallback.
 
-    Set OPENAI_API_KEY in the environment to enable AI. Requires optional 'ai' extras.
+    Set environment variable OPENAI_API_KEY to enable the cloud path.
+    The response is intentionally short and actionable for operators.
     """
     try:
         import os
@@ -34,7 +45,7 @@ def summarize_qsos(qsos: Iterable[QSO], *, model: str = "gpt-4o-mini") -> str:
         if not api_key:
             return _fallback_summary(list(qsos))
         client = OpenAI(api_key=api_key)
-        # Build concise bullet list
+        # Build concise bullet list of the most recent QSOs
         lines = []
         for q in list(qsos)[:50]:
             parts = [q.start_at.strftime("%Y-%m-%d %H:%MZ"), q.call]
@@ -68,10 +79,10 @@ def evaluate_awards(
     *,
     model: str = "gpt-4o-mini",
 ) -> str:
-    """AI-assisted evaluation of awards progress with a deterministic fallback.
+    """Evaluate awards progress and produce a short plan.
 
-    If OpenAI is configured, provides tailored guidance for achieving awards goals.
-    Otherwise, returns a deterministic summary and suggestions.
+    If OpenAI is configured, we provide tailored guidance based on a compact
+    deterministic summary. Otherwise, we return the deterministic baseline.
     """
     qsos_list = list(qsos)
     summary = compute_summary(qsos_list)

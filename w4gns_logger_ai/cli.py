@@ -1,3 +1,9 @@
+"""Command-line interface for W4GNS Logger AI.
+
+Commands cover initializing the database, logging QSOs, listing/searching,
+ADIF import/export, AI summaries, and awards insights (deterministic + AI).
+"""
+
 from __future__ import annotations
 
 import os
@@ -37,6 +43,11 @@ console = Console()
 # Utilities
 
 def _parse_when(when: Optional[str]) -> datetime:
+    """Parse a human-friendly UTC time string.
+
+    Accepts "now" (default) or formats like YYYY-MM-DD, YYYY-MM-DD HH:MM[:SS], or ISO.
+    Returns a naive UTC datetime.
+    """
     if not when or when.lower() == "now":
         # produce naive UTC timestamp without microseconds
         return datetime.now(UTC).replace(tzinfo=None, microsecond=0)
@@ -55,7 +66,7 @@ def _parse_when(when: Optional[str]) -> datetime:
 
 
 def _ensure_db() -> None:
-    # Idempotent; ensures the QSO table exists
+    """Ensure the SQLite database and tables exist (idempotent)."""
     create_db_and_tables()
 
 
@@ -81,6 +92,7 @@ def log(
     country: Optional[str] = typer.Option(None, help="DXCC country"),
     comment: Optional[str] = typer.Option(None, help="Comment"),
 ) -> None:
+    """Log a new QSO with optional radio and operator metadata."""
     _ensure_db()
     dt = _parse_when(when)
     qso = QSO(
@@ -106,6 +118,7 @@ def list_cmd(
     limit: int = typer.Option(20, min=1, max=1000, help="Max QSOs to show"),
     call: Optional[str] = typer.Option(None, help="Filter by callsign contains"),
 ) -> None:
+    """Display recent QSOs in a table, optionally filtering by callsign substring."""
     _ensure_db()
     rows = list_qsos(limit=limit, call=call)
     if not rows:
@@ -134,6 +147,7 @@ def list_cmd(
 
 @app.command()
 def remove(qso_id: int = typer.Argument(..., help="QSO ID to delete")) -> None:
+    """Delete a QSO by database id."""
     _ensure_db()
     if delete_qso(qso_id):
         console.print(f"Deleted QSO id={qso_id}")
@@ -153,6 +167,7 @@ def export(
     limit: int = typer.Option(1000, min=1, help="How many recent QSOs to export"),
     call: Optional[str] = typer.Option(None, help="Filter by callsign contains"),
 ) -> None:
+    """Write recent QSOs to an ADIF file on disk."""
     _ensure_db()
     qsos = list_qsos(limit=limit, call=call)
     txt = dump_adif(qsos)
@@ -170,6 +185,7 @@ def import_adif(
         help="ADIF file to import",
     ),
 ) -> None:
+    """Import QSOs from an ADIF file; callsigns are normalized to uppercase."""
     _ensure_db()
     text = src.read_text(encoding="utf-8", errors="ignore")
     qsos = load_adif(text)
@@ -192,6 +208,7 @@ def search(
     limit: int = typer.Option(100, min=1, help="Max results"),
     json_out: bool = typer.Option(False, help="Output as JSON"),
 ) -> None:
+    """Search QSOs by field and print results as a table or JSON array."""
     _ensure_db()
     rows = search_qsos(call=call, band=band, mode=mode, grid=grid, limit=limit)
     if json_out:
@@ -235,6 +252,7 @@ def search(
 
 @app.command()
 def summarize(limit: int = typer.Option(50, min=1, help="How many recent QSOs to include")) -> None:
+    """Produce a short summary of recent QSOs (AI-enabled when available)."""
     _ensure_db()
     rows = list_qsos(limit=limit)
     text = summarize_qsos(rows)
@@ -248,6 +266,7 @@ def awards_summary(
     json_out: bool = typer.Option(False, help="Output JSON"),
     limit: int = typer.Option(10000, min=1, help="How many recent QSOs to consider"),
 ) -> None:
+    """Compute and display awards-related counts and per-band grid stats."""
     _ensure_db()
     qsos = list_qsos(limit=limit)
     qsos = filtered_qsos(qsos, band=band, mode=mode)
@@ -278,6 +297,7 @@ def awards_suggest(
     mode: Optional[str] = typer.Option(None, help="Filter QSOs by mode before computing"),
     limit: int = typer.Option(10000, min=1, help="How many recent QSOs to consider"),
 ) -> None:
+    """Show simple award suggestions (e.g., DXCC close) based on thresholds."""
     _ensure_db()
     qsos = filtered_qsos(list_qsos(limit=limit), band=band, mode=mode)
     summary = compute_summary(qsos)
@@ -296,6 +316,7 @@ def awards_eval(
     mode: Optional[str] = typer.Option(None, help="Filter QSOs by mode before evaluating"),
     limit: int = typer.Option(10000, min=1, help="How many recent QSOs to consider"),
 ) -> None:
+    """Use AI (when available) to produce a short, actionable awards plan."""
     _ensure_db()
     qsos = filtered_qsos(list_qsos(limit=limit), band=band, mode=mode)
     text = evaluate_awards(qsos, goals=goals)

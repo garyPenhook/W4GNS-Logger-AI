@@ -1,3 +1,5 @@
+[![CI](https://github.com/garyPenhook/W4GNS-Logger-AI/actions/workflows/ci.yml/badge.svg)](https://github.com/garyPenhook/W4GNS-Logger-AI/actions/workflows/ci.yml)
+
 # W4GNS Logger AI
 
 Ham radio QSO logger with SQLite storage, ADIF import/export, awards insights, and an optional AI summary helper.

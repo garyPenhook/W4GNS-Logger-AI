@@ -1,3 +1,9 @@
+"""Minimal ADIF import/export helpers.
+
+We support the most common fields used by this logger. The parser is intentionally
+simple and tolerant; it looks for <TAG:len>value pairs and splits on <EOR>.
+"""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -41,6 +47,10 @@ FIELD_MAP_OUT = {
 
 
 def _parse_adif_record(text: str) -> Dict[str, str]:
+    """Extract a dict of ADIF tag->value from a single record chunk.
+
+    This is a best-effort parser that respects <TAG:len>value and ignores type hints.
+    """
     i = 0
     n = len(text)
     rec: Dict[str, str] = {}
@@ -72,6 +82,10 @@ def _parse_adif_record(text: str) -> Dict[str, str]:
 
 
 def load_adif(text: str) -> List[QSO]:
+    """Parse ADIF text into a list of QSO objects (best effort).
+
+    Records without CALL or without both QSO_DATE and TIME_ON are skipped.
+    """
     records: List[QSO] = []
     # Split by <EOR>
     for chunk in text.split("<EOR>"):
@@ -113,6 +127,7 @@ def load_adif(text: str) -> List[QSO]:
 
 
 def dump_adif(qsos: Iterable[QSO]) -> str:
+    """Serialize QSOs to ADIF text with a minimal header and <EOR>-terminated records."""
     lines: List[str] = ["<ADIF_VER:3>3.1", "<PROGRAMID:13>W4GNS Logger", "<EOH>"]
     for q in qsos:
         dt = q.start_at
@@ -149,4 +164,3 @@ def dump_adif(qsos: Iterable[QSO]) -> str:
         rec.append("<EOR>")
         lines.append("".join(rec))
     return "\n".join(lines) + ("\n" if lines else "")
-

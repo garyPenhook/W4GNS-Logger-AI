@@ -1,3 +1,12 @@
+"""Desktop GUI for W4GNS Logger AI using Tkinter.
+
+Tabs:
+- Log: capture a new QSO via form fields.
+- Browse: filter, view, and delete QSOs in a table.
+- Awards: show deterministic awards summary and evaluate an AI plan.
+- Tools: import/export ADIF and run a quick AI/local summary.
+"""
+
 from __future__ import annotations
 
 import threading
@@ -22,7 +31,10 @@ from .storage import (
 
 
 class LoggerGUI:
+    """Main Tkinter application with tabbed panes for common tasks."""
+
     def __init__(self, root: tk.Tk) -> None:
+        """Initialize the GUI, database, and notebook layout."""
         self.root = root
         self.root.title(APP_NAME)
         self.root.geometry("900x600")
@@ -38,10 +50,12 @@ class LoggerGUI:
 
     # Log tab
     def _build_log_tab(self) -> None:
+        """Create the "Log" tab with QSO entry fields and a Save button."""
         frame = ttk.Frame(self.notebook)
         self.notebook.add(frame, text="Log")
 
         row = 0
+
         def add_field(label: str, width: int = 20) -> tk.Entry:
             nonlocal row
             ttk.Label(frame, text=label).grid(row=row, column=0, sticky=tk.W, padx=6, pady=4)
@@ -70,15 +84,18 @@ class LoggerGUI:
         btn.grid(row=row, column=1, sticky=tk.W, padx=6, pady=8)
 
     def _save_qso(self) -> None:
+        """Validate and persist the QSO entered in the Log tab."""
         call = (self.e_call.get() or "").strip().upper()
         if not call:
             messagebox.showwarning("Missing", "Callsign is required")
             return
+
         def parse_float(s: str) -> Optional[float]:
             try:
                 return float(s)
             except Exception:
                 return None
+
         q = QSO(
             call=call,
             start_at=now_utc(),
@@ -99,6 +116,7 @@ class LoggerGUI:
 
     # Browse tab
     def _build_browse_tab(self) -> None:
+        """Create the "Browse" tab with filters and a results table."""
         frame = ttk.Frame(self.notebook)
         self.notebook.add(frame, text="Browse")
 
@@ -139,6 +157,7 @@ class LoggerGUI:
         self._refresh_table()
 
     def _refresh_table(self) -> None:
+        """Populate the Browse table using current filters (call/band/mode)."""
         call = (self.f_call.get() or None) if hasattr(self, 'f_call') else None
         band = (self.f_band.get() or None) if hasattr(self, 'f_band') else None
         mode = (self.f_mode.get() or None) if hasattr(self, 'f_mode') else None
@@ -157,6 +176,7 @@ class LoggerGUI:
             ))
 
     def _delete_selected(self) -> None:
+        """Delete highlighted QSOs from the Browse table after confirmation."""
         sel = self.tree.selection()
         if not sel:
             return
@@ -170,6 +190,7 @@ class LoggerGUI:
 
     # Awards tab
     def _build_awards_tab(self) -> None:
+        """Create the "Awards" tab showing a summary and AI evaluation tools."""
         frame = ttk.Frame(self.notebook)
         self.notebook.add(frame, text="Awards")
 
@@ -207,6 +228,7 @@ class LoggerGUI:
         self._awards_refresh()
 
     def _awards_refresh(self) -> None:
+        """Compute and display the deterministic awards summary in the text box."""
         band = self.a_band.get() or None
         mode = self.a_mode.get() or None
         qsos = filtered_qsos(list_qsos(limit=10000), band=band, mode=mode)
@@ -226,6 +248,7 @@ class LoggerGUI:
         self.awards_text.insert(tk.END, "\n".join(lines))
 
     def _awards_eval(self) -> None:
+        """Run the AI-assisted awards evaluation in a background thread."""
         band = self.a_band.get() or None
         mode = self.a_mode.get() or None
         goals = self.e_goals.get() or None
@@ -245,6 +268,7 @@ class LoggerGUI:
 
     # Tools tab
     def _build_tools_tab(self) -> None:
+        """Create the "Tools" tab for ADIF import/export and quick summaries."""
         frame = ttk.Frame(self.notebook)
         self.notebook.add(frame, text="Tools")
 
@@ -261,6 +285,7 @@ class LoggerGUI:
         self.tools_text.pack(fill=tk.BOTH, expand=True, padx=8, pady=6)
 
     def _export_adif(self) -> None:
+        """Export recent QSOs to an ADIF file chosen by the user."""
         path = filedialog.asksaveasfilename(
             title="Export ADIF",
             defaultextension=".adi",
@@ -277,6 +302,7 @@ class LoggerGUI:
             messagebox.showerror("Error", str(e))
 
     def _import_adif(self) -> None:
+        """Import QSOs from an ADIF file chosen by the user."""
         path = filedialog.askopenfilename(
             title="Import ADIF",
             filetypes=[("ADIF", ".adi"), ("All Files", "*.*")],
@@ -295,6 +321,7 @@ class LoggerGUI:
             messagebox.showerror("Error", str(e))
 
     def _summarize(self) -> None:
+        """Summarize recent QSOs (AI-enabled) in the Tools tab text area."""
         self.tools_text.delete("1.0", tk.END)
         self.tools_text.insert(tk.END, "Summarizing...\n")
 
@@ -311,6 +338,7 @@ class LoggerGUI:
 
 
 def main() -> None:
+    """Entrypoint for launching the Tkinter GUI."""
     root = tk.Tk()
     # Prefer native theme if available
     try:

@@ -1,3 +1,11 @@
+"""Awards logic: compute stats, configurable thresholds, and suggestions.
+
+- `compute_summary` builds counts used by awards and the AI helper.
+- `get_award_thresholds` reads optional JSON config to override defaults.
+- `suggest_awards` produces simple, readable recommendations.
+- `filtered_qsos` applies band/mode filters before computing.
+"""
+
 from __future__ import annotations
 
 import json
@@ -12,10 +20,12 @@ from .models import QSO
 
 
 def _norm(s: Optional[str]) -> Optional[str]:
+    """Uppercase and strip a value; return None if the result is empty or not a str."""
     return s.strip().upper() if isinstance(s, str) and s.strip() else None
 
 
 def unique_values(qsos: Iterable[QSO], attr: str) -> Set[str]:
+    """Return a set of normalized attribute values across QSOs (e.g., countries or grids)."""
     out: Set[str] = set()
     for q in qsos:
         v = getattr(q, attr, None)
@@ -26,6 +36,7 @@ def unique_values(qsos: Iterable[QSO], attr: str) -> Set[str]:
 
 
 def unique_by_band(qsos: Iterable[QSO], attr: str) -> Dict[str, Set[str]]:
+    """Group unique normalized attribute values by band (e.g., grids per band)."""
     out: Dict[str, Set[str]] = defaultdict(set)
     for q in qsos:
         band = _norm(getattr(q, "band", None)) or ""
@@ -37,6 +48,11 @@ def unique_by_band(qsos: Iterable[QSO], attr: str) -> Dict[str, Set[str]]:
 
 
 def compute_summary(qsos: Iterable[QSO]) -> Dict[str, object]:
+    """Compute counts commonly used for awards and operator insights.
+
+    Returns a dict with totals and uniqueness across calls, bands, modes, grids, countries,
+    plus a per-band grid count map.
+    """
     qsos = list(qsos)
     total = len(qsos)
 
@@ -70,6 +86,7 @@ CONFIG_FILENAME = "awards.json"
 
 
 def _config_path() -> Path:
+    """Resolve the JSON file path for award thresholds, honoring env override."""
     env = os.getenv(CONFIG_ENV_VAR)
     if env:
         return Path(env).expanduser()
@@ -81,7 +98,9 @@ def _config_path() -> Path:
 def get_award_thresholds() -> Dict[str, int]:
     """Load thresholds from JSON, overriding defaults.
 
-    JSON shape: { "DXCC": 125, "VUCC": 75, "MY_CUSTOM": 50 }
+    JSON shape example:
+    { "DXCC": 125, "VUCC": 75, "MY_CUSTOM": 50 }
+    Unknown keys are preserved for future use.
     """
     p = _config_path()
     data: Dict[str, int] = dict(DEFAULT_AWARD_THRESHOLDS)
@@ -100,6 +119,7 @@ def get_award_thresholds() -> Dict[str, int]:
 
 
 def suggest_awards(summary: Dict[str, object]) -> List[str]:
+    """Generate simple, readable suggestions based on thresholds and current counts."""
     thresholds = get_award_thresholds()
     suggestions: List[str] = []
     countries = int(summary.get("unique_countries", 0) or 0)
@@ -136,6 +156,7 @@ def filtered_qsos(
     band: Optional[str] = None,
     mode: Optional[str] = None,
 ) -> List[QSO]:
+    """Return QSOs filtered by normalized band/mode (if provided)."""
     qsos = list(qsos)
     b = _norm(band) if band else None
     m = _norm(mode) if mode else None

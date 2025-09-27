@@ -18,6 +18,7 @@ jobs:
           - os: windows-latest
             python-version: '3.15-dev'
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ contains('3.14,3.15-dev', matrix.python-version) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

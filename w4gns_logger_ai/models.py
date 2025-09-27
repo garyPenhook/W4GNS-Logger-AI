@@ -1,3 +1,9 @@
+"""Data models used by W4GNS Logger AI.
+
+Currently we expose a single SQLModel table, QSO, which represents an
+individual contact. Fields are deliberately practical (band, mode, grid, etc.).
+"""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -7,11 +13,20 @@ from sqlmodel import Field, SQLModel
 
 
 class QSO(SQLModel, table=True):
+    """A single QSO (contact) entry stored in SQLite via SQLModel.
+
+    Attributes
+    - id: Surrogate primary key (autoincrement).
+    - call: Worked station's callsign, uppercased when logged.
+    - start_at: UTC timestamp of when the QSO started (naive UTC).
+    - band/mode/freq_mhz: Radio details; band and mode are free text like "20m" or "FT8".
+    - rst_sent/rst_rcvd: Signal reports.
+    - name/qth/grid/country: Operator/location metadata (optional).
+    - comment: Free-form notes.
+    """
+
     id: Optional[int] = Field(default=None, primary_key=True)
-
     call: str = Field(index=True, description="Station callsign")
-
-    # Start time of QSO in UTC
     start_at: datetime = Field(index=True, description="QSO start time (UTC)")
 
     # Radio details
@@ -34,5 +49,8 @@ class QSO(SQLModel, table=True):
 
 
 def now_utc() -> datetime:
-    # produce naive UTC timestamp without microseconds
+    """Return the current time as a naive UTC datetime without microseconds.
+
+    We intentionally store naive UTC to keep SQLite handling and output simple.
+    """
     return datetime.now(UTC).replace(tzinfo=None, microsecond=0)

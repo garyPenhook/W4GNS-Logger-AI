@@ -16,11 +16,22 @@ import multiprocessing
 import os
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Set
+from typing import Dict, Iterable, List, Optional, Set, TypedDict
 
 from platformdirs import user_config_dir
 
 from .models import QSO
+
+
+class AwardsSummary(TypedDict):
+    """Type definition for awards summary dictionary."""
+    total_qsos: int
+    unique_countries: int
+    unique_grids: int
+    unique_calls: int
+    unique_bands: int
+    unique_modes: int
+    grids_per_band: Dict[str, int]
 
 
 def _norm(s: Optional[str]) -> Optional[str]:
@@ -55,6 +66,7 @@ def _compute_summary_chunk(qsos_chunk: List[QSO]) -> Dict[str, object]:
     """Compute summary statistics for a chunk of QSOs.
 
     This function is designed for parallel processing of large QSO datasets.
+    Returns intermediate results as a dict for merging.
     """
     total = len(qsos_chunk)
 
@@ -77,7 +89,7 @@ def _compute_summary_chunk(qsos_chunk: List[QSO]) -> Dict[str, object]:
     }
 
 
-def _merge_summaries(summaries: List[Dict[str, object]]) -> Dict[str, object]:
+def _merge_summaries(summaries: List[Dict[str, object]]) -> AwardsSummary:
     """Merge multiple summary chunks into a single consolidated summary."""
     if not summaries:
         return {
@@ -90,29 +102,54 @@ def _merge_summaries(summaries: List[Dict[str, object]]) -> Dict[str, object]:
             "grids_per_band": {},
         }
 
-    total_qsos = sum(s["total_qsos"] for s in summaries)
+    total_qsos = 0
+    for s in summaries:
+        val = s.get("total_qsos", 0)
+        if isinstance(val, (int, float)):
+            total_qsos += int(val)
+        elif isinstance(val, str) and val.isdigit():
+            total_qsos += int(val)
 
     # Merge unique sets
-    all_countries = set()
-    all_grids = set()
-    all_calls = set()
-    all_bands = set()
-    all_modes = set()
+    all_countries: Set[str] = set()
+    all_grids: Set[str] = set()
+    all_calls: Set[str] = set()
+    all_bands: Set[str] = set()
+    all_modes: Set[str] = set()
 
     for s in summaries:
-        all_countries.update(s["countries"])
-        all_grids.update(s["grids"])
-        all_calls.update(s["calls"])
-        all_bands.update(s["bands"])
-        all_modes.update(s["modes"])
+        countries = s.get("countries")
+        if isinstance(countries, set):
+            all_countries |= countries
+        grids = s.get("grids")
+        if isinstance(grids, set):
+            all_grids |= grids
+        calls = s.get("calls")
+        if isinstance(calls, set):
+            all_calls |= calls
+        bands = s.get("bands")
+        if isinstance(bands, set):
+            all_bands |= bands
+        modes = s.get("modes")
+        if isinstance(modes, set):
+            all_modes |= modes
 
     # Merge grids per band
-    merged_gpb = defaultdict(set)
+    merged_gpb: Dict[str, int] = defaultdict(int)
     for s in summaries:
-        for band, count in s["grids_per_band"].items():
-            # Note: We need to recalculate this properly for accurate band-specific counts
-            # This is a simplified merge - for exact results, we'd need the actual grid sets
-            merged_gpb[band] = merged_gpb.get(band, 0) + count
+        gpb = s.get("grids_per_band")
+        if isinstance(gpb, dict):
+            for band_key, count_val in gpb.items():
+                # Note: We need to recalculate this properly for accurate band-specific counts
+                # This is a simplified merge - for exact results, we'd need the actual grid sets
+                band_str = str(band_key) if band_key is not None else ""
+                count_int = (
+                    int(count_val)
+                    if isinstance(count_val, (int, float, str)) and count_val
+                    else 0
+                )
+                if count_int > 0:
+                    merged_gpb[band_str] = merged_gpb.get(band_str, 0) + count_int
 
     return {
         "total_qsos": total_qsos,
@@ -125,7 +162,7 @@ def _merge_summaries(summaries: List[Dict[str, object]]) -> Dict[str, object]:
     }
 
 
-def compute_summary_parallel(qsos: Iterable[QSO], chunk_size: int = 5000) -> Dict[str, object]:
+def compute_summary_parallel(qsos: Iterable[QSO], chunk_size: int = 5000) -> AwardsSummary:
     """Compute awards summary using parallel processing for large datasets.
 
     Splits QSOs into chunks and processes them in parallel for better performance.
@@ -169,7 +206,7 @@ def compute_summary_parallel(qsos: Iterable[QSO], chunk_size: int = 5000) -> Dic
         return compute_summary(qsos_list)
 
 
-def _compute_summary_threaded(qsos_list: List[QSO], chunk_size: int) -> Dict[str, object]:
+def _compute_summary_threaded(qsos_list: List[QSO], chunk_size: int) -> AwardsSummary:
     """Thread-based summary computation for CI environments."""
     chunks = [qsos_list[i : i + chunk_size] for i in range(0, len(qsos_list), chunk_size)]
 
@@ -188,7 +225,7 @@ def _compute_summary_threaded(qsos_list: List[QSO], chunk_size: int) -> Dict[str
         return compute_summary(qsos_list)
 
 
-def compute_summary(qsos: Iterable[QSO]) -> Dict[str, object]:
+def compute_summary(qsos: Iterable[QSO]) -> AwardsSummary:
     """Compute counts commonly used for awards and operator insights.
 
     Returns a dict with totals and uniqueness across calls, bands, modes, grids, countries,
@@ -259,16 +296,16 @@ def get_award_thresholds() -> Dict[str, int]:
             with p.open("r", encoding="utf-8") as f:
                 raw = json.load(f)
                 if isinstance(raw, dict):
-                    for k, v in raw.items():
-                        if isinstance(k, str) and isinstance(v, int) and v > 0:
-                            data[k.upper()] = v
+                    for key, val in raw.items():
+                        if isinstance(key, str) and isinstance(val, int) and val > 0:
+                            data[key.upper()] = val
     except (IOError, OSError, json.JSONDecodeError, ValueError, TypeError):
         # Ignore malformed configs; fall back to defaults
         pass
     return data
 
 
-def suggest_awards(summary: Dict[str, object]) -> List[str]:
+def suggest_awards(summary: AwardsSummary) -> List[str]:
     """Generate simple, readable suggestions based on thresholds and current counts.
 
     Handles missing or invalid summary data gracefully.
@@ -276,8 +313,8 @@ def suggest_awards(summary: Dict[str, object]) -> List[str]:
     try:
         thresholds = get_award_thresholds()
         suggestions: List[str] = []
-        countries = int(summary.get("unique_countries", 0) or 0)
-        grids = int(summary.get("unique_grids", 0) or 0)
+        countries = summary.get("unique_countries", 0)
+        grids = summary.get("unique_grids", 0)
 
         dxcc_needed = thresholds.get("DXCC", DEFAULT_AWARD_THRESHOLDS["DXCC"])
         vucc_needed = thresholds.get("VUCC", DEFAULT_AWARD_THRESHOLDS["VUCC"])
@@ -295,15 +332,10 @@ def suggest_awards(summary: Dict[str, object]) -> List[str]:
             suggestions.append(f"VUCC close: {grids} grids (need {remaining} more)")
 
         # Band-specific VUCC hints
-        gpb = summary.get("grids_per_band", {}) or {}
-        if isinstance(gpb, dict):
-            for band, count in sorted(gpb.items()):
-                try:
-                    c = int(count or 0)
-                    if c >= 50:
-                        suggestions.append(f"Strong grid count on {band or 'unknown'}: {c}")
-                except (ValueError, TypeError):
-                    continue
+        gpb = summary.get("grids_per_band", {})
+        for band, count in sorted(gpb.items()):
+            if count >= 50:
+                suggestions.append(f"Strong grid count on {band or 'unknown'}: {count}")
         return suggestions
     except Exception:
         # Return empty list if anything goes wrong

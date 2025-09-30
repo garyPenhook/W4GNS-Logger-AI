@@ -142,8 +142,12 @@ class LoggerGUI:
         self.f_mode = ttk.Entry(filters, width=10)
         self.f_mode.pack(side="left", padx=6)
 
-        ttk.Button(filters, text="Refresh", command=self._refresh_table).pack(side="left", padx=6)
-        ttk.Button(filters, text="Delete selected", command=self._delete_selected).pack(side="left", padx=6)
+        ttk.Button(filters, text="Refresh", command=self._refresh_table).pack(
+            side="left", padx=6
+        )
+        ttk.Button(filters, text="Delete selected", command=self._delete_selected).pack(
+            side="left", padx=6
+        )
 
         self.tree = ttk.Treeview(
             frame,
@@ -240,9 +244,10 @@ class LoggerGUI:
             f"- Unique calls: {s['unique_calls']}",
             f"- Unique bands: {s['unique_bands']} | modes: {s['unique_modes']}",
         ]
-        gpb = s.get('grids_per_band', {}) or {}
-        for b, c in sorted(gpb.items()):
-            lines.append(f"- Grids on {b or 'unknown'}: {c}")
+        gpb = s.get('grids_per_band', {})
+        if gpb:
+            for b, c in sorted(gpb.items()):
+                lines.append(f"- Grids on {b or 'unknown'}: {c}")
         self.awards_text.delete("1.0", tk.END)
         self.awards_text.insert(tk.END, "\n".join(lines))
 

@@ -260,7 +260,10 @@ def import_adif(
                 add_qso(q)
 
         count_after = len(list_qsos(limit=99999))
-        console.print(f"[green]Imported {len(qsos)} QSOs. Total now: {count_after} (was {count_before}).[/green]")
+        console.print(
+            f"[green]Imported {len(qsos)} QSOs. "
+            f"Total now: {count_after} (was {count_before}).[/green]"
+        )
 
     except Exception as e:
         console.print(f"[red]Error importing ADIF: {e}[/red]")

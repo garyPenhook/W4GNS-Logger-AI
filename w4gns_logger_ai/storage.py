@@ -70,7 +70,10 @@ def get_engine():
                     }
 
                     # Detect CI environment and use simpler settings
-                    is_ci = any(env in os.environ for env in ['CI', 'GITHUB_ACTIONS', 'TRAVIS', 'JENKINS'])
+                    is_ci = any(
+                        env in os.environ
+                        for env in ['CI', 'GITHUB_ACTIONS', 'TRAVIS', 'JENKINS']
+                    )
 
                     if is_ci:
                         # Simpler configuration for CI environments

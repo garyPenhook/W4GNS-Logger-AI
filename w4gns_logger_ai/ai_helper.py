@@ -75,7 +75,9 @@ def summarize_qsos(qsos: Iterable[QSO], *, model: str = "gpt-4o-mini") -> str:
         return _fallback_summary(list(qsos))
 
 
-def summarize_qsos_parallel(qsos_batches: List[List[QSO]], *, model: str = "gpt-4o-mini") -> List[str]:
+def summarize_qsos_parallel(
+    qsos_batches: List[List[QSO]], *, model: str = "gpt-4o-mini"
+) -> List[str]:
     """Summarize multiple batches of QSOs concurrently using OpenAI.
 
     Processes multiple QSO batches in parallel for improved performance.
@@ -113,7 +115,8 @@ def summarize_qsos_parallel(qsos_batches: List[List[QSO]], *, model: str = "gpt-
 
                 prompt = (
                     "You are an assistant for a ham radio QSO log. Summarize these QSOs "
-                    "into 2-4 short bullet points, highlighting bands, modes, notable DX, and patterns.\n\n"
+                    "into 2-4 short bullet points, highlighting bands, modes, "
+                    "notable DX, and patterns.\n\n"
                     + "\n".join(lines)
                 )
 

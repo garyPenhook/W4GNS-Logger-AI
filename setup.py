@@ -6,14 +6,21 @@ from pathlib import Path
 
 from setuptools import Extension, setup
 
-# Check if Cython is available
-try:
-    from Cython.Build import cythonize
+# Check if we should skip C extension build (e.g., in CI without compiler)
+SKIP_CYTHON_BUILD = os.environ.get("SKIP_CYTHON_BUILD", "0") == "1"
 
-    USE_CYTHON = True
-except ImportError:
+if SKIP_CYTHON_BUILD:
+    print("Skipping Cython extension build (SKIP_CYTHON_BUILD=1)", file=sys.stderr)
     USE_CYTHON = False
-    print("Cython not found. Building from C sources if available.", file=sys.stderr)
+else:
+    # Check if Cython is available
+    try:
+        from Cython.Build import cythonize
+
+        USE_CYTHON = True
+    except ImportError:
+        USE_CYTHON = False
+        print("Cython not found. Building from C sources if available.", file=sys.stderr)
 
 # Define extension modules
 ext_modules = []

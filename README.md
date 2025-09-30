@@ -106,6 +106,21 @@ Unknown keys are accepted for future use; only known awards are applied today.
 - Lint: `ruff check .`
 - Tests: `pytest -q`
 
+### For AI Coding Assistants 🤖
+
+This project has comprehensive guidelines for AI assistants in the `.ai/` directory:
+- **[Quick Reference](.ai/quick-reference.md)** - Start here! Performance patterns, common tasks, critical rules
+- **[Coding Guidelines](.ai/coding-guidelines.md)** - Detailed architecture, patterns, and best practices
+
+Key principles:
+- ✅ Use generators (`Iterator[T]`) for all data processing
+- ✅ Optimize parallelization with `get_optimal_workers()`
+- ✅ Stream large files and datasets
+- ✅ Use `next()` for early termination
+- ✅ Always include type hints and error handling
+
+See also: `STREAMING_IMPROVEMENTS_SUMMARY.md`, `HYPERTHREADING_SUMMARY.md`
+
 ## CI
 
 A GitHub Actions workflow runs lint and tests on pushes/PRs.

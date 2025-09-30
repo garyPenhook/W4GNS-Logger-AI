@@ -90,7 +90,7 @@ def benchmark_adif_parsing(adif_text: str, iterations: int = 10):
     avg_time = total_time / iterations
     qsos_per_sec = len(qsos) / avg_time if avg_time > 0 else 0
 
-    print(f"\nResults:")
+    print("\nResults:")
     print(f"  Total time: {total_time:.3f}s")
     print(f"  Average time: {avg_time:.3f}s per iteration")
     print(f"  QSOs parsed: {len(qsos):,}")
@@ -119,11 +119,11 @@ def benchmark_awards_computation(qsos: List[QSO], iterations: int = 10):
     avg_time = total_time / iterations
     qsos_per_sec = len(qsos) / avg_time if avg_time > 0 else 0
 
-    print(f"\nResults:")
+    print("\nResults:")
     print(f"  Total time: {total_time:.3f}s")
     print(f"  Average time: {avg_time:.3f}s per iteration")
     print(f"  Throughput: {qsos_per_sec:,.0f} QSOs/sec")
-    print(f"\nSummary stats:")
+    print("\nSummary stats:")
     print(f"  Countries: {summary['unique_countries']}")
     print(f"  Grids: {summary['unique_grids']}")
     print(f"  Calls: {summary['unique_calls']}")
@@ -151,7 +151,7 @@ def benchmark_adif_export(qsos: List[QSO], iterations: int = 10):
     avg_time = total_time / iterations
     qsos_per_sec = len(qsos) / avg_time if avg_time > 0 else 0
 
-    print(f"\nResults:")
+    print("\nResults:")
     print(f"  Total time: {total_time:.3f}s")
     print(f"  Average time: {avg_time:.3f}s per iteration")
     print(f"  Output size: {len(text):,} bytes")
@@ -167,7 +167,7 @@ def main():
     print("="*60)
 
     # Check if C extensions are available
-    from w4gns_logger_ai import adif, awards
+    from w4gns_logger_ai import adif
 
     if hasattr(adif, "USE_C_EXTENSIONS"):
         if adif.USE_C_EXTENSIONS:

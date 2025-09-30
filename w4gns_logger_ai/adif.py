@@ -20,9 +20,9 @@ from .models import QSO
 
 # Try to import C-optimized functions, fall back to pure Python
 try:
+    from .c_extensions.c_adif_export import dump_adif_stream_fast as _dump_adif_stream_c
     from .c_extensions.c_adif_parser import parse_adif_record as _parse_adif_record_c
     from .c_extensions.c_adif_parser import process_adif_chunk as _process_adif_chunk_c
-    from .c_extensions.c_adif_export import dump_adif_stream_fast as _dump_adif_stream_c
     
     USE_C_EXTENSIONS = True
     print("Using C-optimized ADIF functions (10-50x speedup)", flush=True)

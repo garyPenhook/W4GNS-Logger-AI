@@ -29,8 +29,14 @@ from .models import QSO
 try:
     from .c_extensions.c_awards import (
         compute_summary_chunk_fast as _compute_summary_chunk_c,
+    )
+    from .c_extensions.c_awards import (
         norm as _norm_c,
+    )
+    from .c_extensions.c_awards import (
         unique_by_band_fast as _unique_by_band_c,
+    )
+    from .c_extensions.c_awards import (
         unique_values_fast as _unique_values_c,
     )
 

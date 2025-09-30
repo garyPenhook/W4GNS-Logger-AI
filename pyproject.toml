@@ -36,7 +36,12 @@ dependencies = [
 ai = [
   "openai>=1.44",
 ]
-# Dev tools and tests; install with: uv pip install -e .[dev]
+# Testing and linting only; install with: uv pip install -e .[test]
+test = [
+  "pytest>=8.2",
+  "ruff>=0.6",
+]
+# Dev tools including C extension build; install with: uv pip install -e .[dev]
 dev = [
   "pytest>=8.2",
   "ruff>=0.6",

@@ -17,6 +17,11 @@ build/
 dist/
 *.egg-info/
 
+# Cython/C extensions
+*.c  # Generated C files from Cython
+*.so  # Compiled shared objects (Linux/macOS)
+*.pyd  # Compiled extensions (Windows)
+
 # Local data
 *.sqlite3
 *.db

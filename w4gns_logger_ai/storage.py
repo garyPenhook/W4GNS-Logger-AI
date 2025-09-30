@@ -13,7 +13,7 @@ import os
 import threading
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import Iterable, Iterator, List, Optional
 
 from platformdirs import user_data_dir
 from sqlmodel import Session, SQLModel, create_engine, select
@@ -215,10 +215,22 @@ def find_qso_by_frequency(
         raise RuntimeError(f"Failed to find QSO by frequency {freq_mhz}: {e}") from e
 
 
-def list_qsos(limit: int = 100, call: Optional[str] = None) -> List[QSO]:
-    """Return recent QSOs, optionally filtering by callsign substring.
+def list_qsos_stream(
+    limit: int = 100, call: Optional[str] = None
+) -> Iterator[QSO]:
+    """Stream QSOs without loading all into memory (generator).
 
-    Raises RuntimeError if database query fails.
+    Memory efficient for large datasets. Yields QSOs one at a time.
+
+    Args:
+        limit: Maximum number of QSOs to yield
+        call: Optional callsign substring filter
+
+    Yields:
+        QSO objects one at a time
+
+    Raises:
+        RuntimeError if database query fails
     """
     try:
         with session_scope() as session:
@@ -226,7 +238,22 @@ def list_qsos(limit: int = 100, call: Optional[str] = None) -> List[QSO]:
             if call:
                 stmt = stmt.where(QSO.call.ilike(f"%{call}%"))
             stmt = stmt.order_by(QSO.start_at.desc()).limit(limit)
-            return list(session.exec(stmt))
+            for qso in session.exec(stmt):
+                yield qso
+    except Exception as e:
+        raise RuntimeError(f"Failed to stream QSOs: {e}") from e
+
+
+def list_qsos(limit: int = 100, call: Optional[str] = None) -> List[QSO]:
+    """Return recent QSOs, optionally filtering by callsign substring.
+
+    For memory-efficient streaming, use list_qsos_stream() instead.
+
+    Raises RuntimeError if database query fails.
+    """
+    try:
+        # Use streaming internally for consistency
+        return list(list_qsos_stream(limit=limit, call=call))
     except Exception as e:
         raise RuntimeError(f"Failed to list QSOs: {e}") from e
 
@@ -295,17 +322,29 @@ def bulk_add_qsos_parallel(qsos: Iterable[QSO], batch_size: int = 1000) -> int:
         raise RuntimeError(f"Failed to bulk add QSOs: {e}") from e
 
 
-def search_qsos(
+def search_qsos_stream(
     call: Optional[str] = None,
     band: Optional[str] = None,
     mode: Optional[str] = None,
     grid: Optional[str] = None,
     limit: int = 100,
-) -> List[QSO]:
-    """Flexible search across common fields; values must match exactly
-    except for `call`, which does a case-insensitive substring match.
+) -> Iterator[QSO]:
+    """Stream search results without loading all into memory (generator).
 
-    Raises RuntimeError if database query fails.
+    Memory efficient for large result sets. Yields QSOs one at a time.
+
+    Args:
+        call: Callsign substring filter (case-insensitive)
+        band: Exact band match
+        mode: Exact mode match
+        grid: Exact grid match
+        limit: Maximum results to yield
+
+    Yields:
+        Matching QSO objects one at a time
+
+    Raises:
+        RuntimeError if database query fails
     """
     try:
         with session_scope() as session:
@@ -319,7 +358,33 @@ def search_qsos(
             if grid:
                 stmt = stmt.where(QSO.grid == grid)
             stmt = stmt.order_by(QSO.start_at.desc()).limit(limit)
-            return list(session.exec(stmt))
+            for qso in session.exec(stmt):
+                yield qso
+    except Exception as e:
+        raise RuntimeError(f"Failed to stream search results: {e}") from e
+
+
+def search_qsos(
+    call: Optional[str] = None,
+    band: Optional[str] = None,
+    mode: Optional[str] = None,
+    grid: Optional[str] = None,
+    limit: int = 100,
+) -> List[QSO]:
+    """Flexible search across common fields; values must match exactly
+    except for `call`, which does a case-insensitive substring match.
+
+    For memory-efficient streaming, use search_qsos_stream() instead.
+
+    Raises RuntimeError if database query fails.
+    """
+    try:
+        # Use streaming internally for consistency
+        return list(
+            search_qsos_stream(
+                call=call, band=band, mode=mode, grid=grid, limit=limit
+            )
+        )
     except Exception as e:
         raise RuntimeError(f"Failed to search QSOs: {e}") from e
 

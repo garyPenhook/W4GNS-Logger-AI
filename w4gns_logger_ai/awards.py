@@ -16,7 +16,7 @@ import multiprocessing
 import os
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Set, TypedDict
+from typing import Dict, Iterable, Iterator, List, Optional, Set, TypedDict
 
 from platformdirs import user_config_dir
 
@@ -343,21 +343,52 @@ def suggest_awards(summary: AwardsSummary) -> List[str]:
         return []
 
 
+def filtered_qsos_stream(
+    qsos: Iterable[QSO],
+    *,
+    band: Optional[str] = None,
+    mode: Optional[str] = None,
+) -> Iterator[QSO]:
+    """Stream filtered QSOs without building intermediate list (generator).
+
+    Memory efficient for large datasets. Yields matching QSOs one at a time.
+    Can be chained with other generators for pipeline processing.
+
+    Args:
+        qsos: Iterable of QSO objects (can be another generator)
+        band: Optional band filter (normalized)
+        mode: Optional mode filter (normalized)
+
+    Yields:
+        QSO objects matching the filter criteria
+
+    Example:
+        # Chain generators for single-pass filtering
+        qsos = list_qsos_stream(limit=100000)
+        filtered = filtered_qsos_stream(qsos, band="20m")
+        for qso in filtered:
+            print(qso)
+    """
+    b = _norm(band) if band else None
+    m = _norm(mode) if mode else None
+
+    for q in qsos:
+        if b and _norm(q.band) != b:
+            continue
+        if m and _norm(q.mode) != m:
+            continue
+        yield q
+
+
 def filtered_qsos(
     qsos: Iterable[QSO],
     *,
     band: Optional[str] = None,
     mode: Optional[str] = None,
 ) -> List[QSO]:
-    """Return QSOs filtered by normalized band/mode (if provided)."""
-    qsos = list(qsos)
-    b = _norm(band) if band else None
-    m = _norm(mode) if mode else None
-    out: List[QSO] = []
-    for q in qsos:
-        if b and _norm(q.band) != b:
-            continue
-        if m and _norm(q.mode) != m:
-            continue
-        out.append(q)
-    return out
+    """Return QSOs filtered by normalized band/mode (if provided).
+
+    For memory-efficient streaming, use filtered_qsos_stream() instead.
+    """
+    # Use streaming internally for consistency
+    return list(filtered_qsos_stream(qsos, band=band, mode=mode))

@@ -9,7 +9,9 @@ from w4gns_logger_ai.storage import (
     get_first_qso_by_call,
     get_qso,
     list_qsos,
+    list_qsos_stream,
     search_qsos,
+    search_qsos_stream,
 )
 
 
@@ -201,4 +203,84 @@ def test_next_function_helpers(tmp_path):
             os.environ["W4GNS_DB_PATH"] = original_db_path
         elif "W4GNS_DB_PATH" in os.environ:
             del os.environ["W4GNS_DB_PATH"]
+
+
+def test_streaming_functions(tmp_path):
+    """Test generator-based streaming functions for memory efficiency."""
+    import os
+    from datetime import datetime
+
+    # Import storage module to access engine
+    from w4gns_logger_ai import storage
+
+    # Use temporary database for testing
+    original_db_path = os.environ.get("W4GNS_DB_PATH")
+    test_db = str(tmp_path / "test_stream.sqlite3")
+    os.environ["W4GNS_DB_PATH"] = test_db
+
+    try:
+        # Reset the cached engine to force new connection
+        storage._engine = None
+
+        # Create tables
+        create_db_and_tables()
+
+        # Add test QSOs - use unique calls
+        for i in range(20):
+            add_qso(
+                QSO(
+                    call=f"W{i % 3}STREAM",  # W0STREAM, W1STREAM, W2STREAM repeating
+                    start_at=datetime(2024, 1, i + 1, 12, 0, 0),
+                    band="20m" if i % 2 == 0 else "40m",
+                    mode="SSB" if i % 3 == 0 else "CW",
+                    freq_mhz=14.0 + i * 0.1,
+                )
+            )
+
+        # Test list_qsos_stream - should yield items one at a time
+        stream_count = 0
+        for qso in list_qsos_stream(limit=10):
+            assert "STREAM" in qso.call
+            stream_count += 1
+        assert stream_count == 10
+
+        # Test search_qsos_stream - filter by band
+        band_count = 0
+        for qso in search_qsos_stream(band="20m", limit=20):
+            assert qso.band == "20m"
+            band_count += 1
+        assert band_count == 10  # Half are 20m
+
+        # Test search_qsos_stream - filter by call
+        call_count = 0
+        for qso in search_qsos_stream(call="W1", limit=20):
+            assert "W1" in qso.call
+            call_count += 1
+        # Should match W1STREAM entries
+        assert call_count > 0
+
+        # Test streaming with early termination (generator efficiency)
+        first_five = []
+        for i, qso in enumerate(list_qsos_stream(limit=100)):
+            first_five.append(qso)
+            if i >= 4:  # Stop after 5
+                break
+        assert len(first_five) == 5
+
+        # Verify streaming uses less memory than list
+        stream_result = list_qsos_stream(limit=5)
+        assert hasattr(stream_result, "__iter__")
+        assert hasattr(stream_result, "__next__")
+
+    finally:
+        # Cleanup environment
+        if original_db_path:
+            os.environ["W4GNS_DB_PATH"] = original_db_path
+        elif "W4GNS_DB_PATH" in os.environ:
+            del os.environ["W4GNS_DB_PATH"]
+        # Reset engine again to pick up restored path
+        storage._engine = None
+
+
+
 

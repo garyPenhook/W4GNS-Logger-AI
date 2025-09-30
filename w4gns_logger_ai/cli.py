@@ -196,14 +196,38 @@ def export(
     ),
     limit: int = typer.Option(1000, min=1, help="How many recent QSOs to export"),
     call: Optional[str] = typer.Option(None, help="Filter by callsign contains"),
+    stream: bool = typer.Option(
+        False, help="Use streaming export (memory efficient for large files)"
+    ),
 ) -> None:
-    """Write recent QSOs to an ADIF file on disk."""
+    """Write recent QSOs to an ADIF file on disk.
+    
+    Use --stream for memory-efficient export of large datasets (10K+ QSOs).
+    """
     try:
         _ensure_db()
-        qsos = list_qsos(limit=limit, call=call)
-        txt = dump_adif(qsos)
-        output.write_text(txt, encoding="utf-8")
-        console.print(f"Exported {len(qsos)} QSOs to {output}")
+        
+        if stream:
+            # Streaming export - memory efficient
+            from w4gns_logger_ai.adif import dump_adif_stream
+            from w4gns_logger_ai.storage import list_qsos_stream
+            
+            count = 0
+            with output.open('w', encoding='utf-8') as f:
+                for line in dump_adif_stream(list_qsos_stream(limit=limit, call=call)):
+                    f.write(line)
+                    if line.strip().endswith('<EOR>'):
+                        count += 1
+            
+            console.print(
+                f"[green]Streamed {count} QSOs to {output} (memory efficient)[/green]"
+            )
+        else:
+            # Regular export - loads all into memory
+            qsos = list_qsos(limit=limit, call=call)
+            txt = dump_adif(qsos)
+            output.write_text(txt, encoding="utf-8")
+            console.print(f"Exported {len(qsos)} QSOs to {output}")
     except Exception as e:
         console.print(f"[red]Error exporting ADIF: {e}[/red]")
         raise typer.Exit(1) from e

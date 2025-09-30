@@ -11,7 +11,7 @@ from __future__ import annotations
 import concurrent.futures
 import multiprocessing
 from datetime import datetime
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable, Iterator, List
 
 from .models import QSO
 
@@ -223,9 +223,29 @@ def load_adif(text: str) -> List[QSO]:
     return records
 
 
-def dump_adif(qsos: Iterable[QSO]) -> str:
-    """Serialize QSOs to ADIF text with a minimal header and <EOR>-terminated records."""
-    lines: List[str] = ["<ADIF_VER:3>3.1", "<PROGRAMID:13>W4GNS Logger", "<EOH>"]
+def dump_adif_stream(qsos: Iterable[QSO]) -> Iterator[str]:
+    """Stream ADIF text line-by-line for memory-efficient export (generator).
+
+    Yields ADIF records one at a time instead of building entire string.
+    Ideal for large exports (50K+ QSOs) to minimize memory usage.
+
+    Args:
+        qsos: Iterable of QSO objects to serialize
+
+    Yields:
+        ADIF text lines one at a time
+
+    Example:
+        with open('export.adi', 'w') as f:
+            for line in dump_adif_stream(qsos):
+                f.write(line)
+    """
+    # Yield header
+    yield "<ADIF_VER:3>3.1\n"
+    yield "<PROGRAMID:13>W4GNS Logger\n"
+    yield "<EOH>\n"
+
+    # Stream records
     for q in qsos:
         dt = q.start_at
         date = dt.strftime("%Y%m%d")
@@ -234,30 +254,44 @@ def dump_adif(qsos: Iterable[QSO]) -> str:
         def field(tag: str, value: str) -> str:
             return f"<{tag}:{len(value)}>{value}"
 
-        rec: List[str] = []
-        rec.append(field("QSO_DATE", date))
-        rec.append(field("TIME_ON", time))
-        rec.append(field("CALL", q.call))
+        parts = [
+            field("QSO_DATE", date),
+            field("TIME_ON", time),
+            field("CALL", q.call),
+        ]
+
         if q.band:
-            rec.append(field("BAND", q.band))
+            parts.append(field("BAND", q.band))
         if q.mode:
-            rec.append(field("MODE", q.mode))
+            parts.append(field("MODE", q.mode))
         if q.freq_mhz is not None:
-            rec.append(field("FREQ", f"{q.freq_mhz:.6f}".rstrip("0").rstrip(".")))
+            parts.append(
+                field("FREQ", f"{q.freq_mhz:.6f}".rstrip("0").rstrip("."))
+            )
         if q.rst_sent:
-            rec.append(field("RST_SENT", q.rst_sent))
+            parts.append(field("RST_SENT", q.rst_sent))
         if q.rst_rcvd:
-            rec.append(field("RST_RCVD", q.rst_rcvd))
+            parts.append(field("RST_RCVD", q.rst_rcvd))
         if q.name:
-            rec.append(field("NAME", q.name))
+            parts.append(field("NAME", q.name))
         if q.qth:
-            rec.append(field("QTH", q.qth))
+            parts.append(field("QTH", q.qth))
         if q.grid:
-            rec.append(field("GRIDSQUARE", q.grid))
+            parts.append(field("GRIDSQUARE", q.grid))
         if q.country:
-            rec.append(field("COUNTRY", q.country))
+            parts.append(field("COUNTRY", q.country))
         if q.comment:
-            rec.append(field("COMMENT", q.comment))
-        rec.append("<EOR>")
-        lines.append("".join(rec))
-    return "\n".join(lines) + ("\n" if lines else "")
+            parts.append(field("COMMENT", q.comment))
+
+        parts.append("<EOR>")
+        yield "".join(parts) + "\n"
+
+
+def dump_adif(qsos: Iterable[QSO]) -> str:
+    """Serialize QSOs to ADIF text with a minimal header and <EOR>-terminated records.
+
+    For large exports, consider using dump_adif_stream() for better memory efficiency.
+    """
+    # Use streaming internally, then join (backward compatible)
+    return "".join(dump_adif_stream(qsos))
+

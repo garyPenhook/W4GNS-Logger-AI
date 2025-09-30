@@ -1,6 +1,4 @@
 import json
-import tempfile
-from pathlib import Path
 
 from w4gns_logger_ai.awards import get_award_thresholds
 
@@ -32,7 +30,6 @@ def test_custom_thresholds(tmp_path, monkeypatch):
 
     # Clear any cached config by reimporting (CI-safe approach)
     import sys
-    import importlib
 
     # Remove from cache if present
     if 'w4gns_logger_ai.awards' in sys.modules:

@@ -5,6 +5,7 @@ import pytest
 def sample_qso():
     """Create a sample QSO for testing."""
     from datetime import datetime
+
     from w4gns_logger_ai.models import QSO
 
     return QSO(

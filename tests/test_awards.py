@@ -2,20 +2,41 @@ from datetime import datetime
 
 from w4gns_logger_ai.awards import (
     compute_summary,
-    filtered_qsos,
-    suggest_awards,
-    get_award_thresholds,
     compute_summary_parallel,
+    filtered_qsos,
+    get_award_thresholds,
+    suggest_awards,
 )
 from w4gns_logger_ai.models import QSO
 
 
-def test_compute_summary_basic():
+def test_compute_summary():
     """Test basic awards summary computation."""
     qsos = [
-        QSO(call="K1ABC", start_at=datetime(2024, 1, 1), country="USA", grid="FN42", band="20m", mode="SSB"),
-        QSO(call="G0XYZ", start_at=datetime(2024, 1, 2), country="England", grid="IO91", band="40m", mode="CW"),
-        QSO(call="JA1DEF", start_at=datetime(2024, 1, 3), country="Japan", grid="PM95", band="20m", mode="FT8"),
+        QSO(
+            call="K1ABC",
+            start_at=datetime(2024, 1, 1),
+            country="USA",
+            grid="FN42",
+            band="20m",
+            mode="SSB",
+        ),
+        QSO(
+            call="G0XYZ",
+            start_at=datetime(2024, 1, 2),
+            country="England",
+            grid="IO91",
+            band="40m",
+            mode="CW",
+        ),
+        QSO(
+            call="JA1DEF",
+            start_at=datetime(2024, 1, 3),
+            country="Japan",
+            grid="PM95",
+            band="20m",
+            mode="FT8",
+        ),
     ]
 
     summary = compute_summary(qsos)

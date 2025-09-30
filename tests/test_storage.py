@@ -1,15 +1,13 @@
-import tempfile
-from pathlib import Path
 
 from w4gns_logger_ai.models import QSO
 from w4gns_logger_ai.storage import (
     add_qso,
+    bulk_add_qsos,
     create_db_and_tables,
     delete_qso,
     get_qso,
     list_qsos,
     search_qsos,
-    bulk_add_qsos,
 )
 
 

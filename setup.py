@@ -90,9 +90,20 @@ else:
                 )
             )
 
+# Print build status
+if not ext_modules:
+    print("=" * 70, file=sys.stderr)
+    print("NOTE: Building without C extensions (pure Python mode)", file=sys.stderr)
+    print("C extensions provide 10-100x speedup but require:", file=sys.stderr)
+    print("  - Cython (pip install Cython)", file=sys.stderr)
+    print("  - C compiler (gcc/clang/MSVC)", file=sys.stderr)
+    print("  - Python dev headers (python3-dev)", file=sys.stderr)
+    print("The package will work fine in pure Python mode.", file=sys.stderr)
+    print("=" * 70, file=sys.stderr)
+
 # Build configuration
 setup(
-    ext_modules=ext_modules,
+    ext_modules=ext_modules if ext_modules else [],
     # Allow build to succeed even if C extensions fail
     # (pure Python fallback will be used)
     zip_safe=False,

@@ -13,12 +13,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        python-version: ['3.12', '3.13', '3.14', '3.15-dev']
-        exclude:
-          - os: windows-latest
-            python-version: '3.15-dev'
+        python-version: ['3.12', '3.13']
     runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ contains('3.14,3.15-dev', matrix.python-version) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,13 +23,12 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-          allow-prereleases: true
           cache: 'pip'
           cache-dependency-path: pyproject.toml
 
-      - name: Upgrade pip
+      - name: Upgrade pip and install build tools
         run: |
-          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --upgrade pip setuptools wheel hatchling
 
       - name: Install project (dev)
         run: |
@@ -45,4 +40,4 @@ jobs:
 
       - name: Test
         run: |
-          python -m pytest -q
+          python -m pytest -v

@@ -159,6 +159,62 @@ def get_qso(qso_id: int) -> Optional[QSO]:
         raise RuntimeError(f"Failed to retrieve QSO {qso_id}: {e}") from e
 
 
+def get_first_qso_by_call(call: str) -> Optional[QSO]:
+    """Find the first QSO matching a callsign (case-insensitive).
+
+    More efficient than search_qsos when you only need one result.
+    Uses next() to stop iteration immediately at first match.
+
+    Args:
+        call: Callsign to search for (substring match)
+
+    Returns:
+        First matching QSO or None
+
+    Raises:
+        RuntimeError if database query fails
+    """
+    try:
+        with session_scope() as session:
+            stmt = select(QSO).where(QSO.call.ilike(f"%{call}%")).order_by(
+                QSO.start_at.desc()
+            )
+            return next(session.exec(stmt), None)
+    except Exception as e:
+        raise RuntimeError(f"Failed to find QSO by call {call}: {e}") from e
+
+
+def find_qso_by_frequency(
+    freq_mhz: float, tolerance: float = 0.001
+) -> Optional[QSO]:
+    """Find first QSO near a given frequency.
+
+    Uses next() for efficient early termination at first match.
+
+    Args:
+        freq_mhz: Target frequency in MHz
+        tolerance: Acceptable deviation in MHz (default 0.001 = 1 kHz)
+
+    Returns:
+        First matching QSO or None
+
+    Raises:
+        RuntimeError if database query fails
+    """
+    try:
+        with session_scope() as session:
+            stmt = (
+                select(QSO)
+                .where(
+                    QSO.freq_mhz.between(freq_mhz - tolerance, freq_mhz + tolerance)
+                )
+                .order_by(QSO.start_at.desc())
+            )
+            return next(session.exec(stmt), None)
+    except Exception as e:
+        raise RuntimeError(f"Failed to find QSO by frequency {freq_mhz}: {e}") from e
+
+
 def list_qsos(limit: int = 100, call: Optional[str] = None) -> List[QSO]:
     """Return recent QSOs, optionally filtering by callsign substring.
 
@@ -312,9 +368,12 @@ def search_qsos_parallel(
                 results = []
                 offset = 0
                 while len(results) < limit:
-                    batch_stmt = stmt.offset(offset).limit(min(batch_size, limit - len(results)))
+                    batch_stmt = stmt.offset(offset).limit(
+                        min(batch_size, limit - len(results))
+                    )
                     batch_results = list(session.exec(batch_stmt))
-                    if not batch_results:
+                    # Use next() to check if batch is empty (more Pythonic)
+                    if next(iter(batch_results), None) is None:
                         break
                     results.extend(batch_results)
                     offset += batch_size

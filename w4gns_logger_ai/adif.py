@@ -215,11 +215,10 @@ def load_adif(text: str) -> List[QSO]:
     if len(chunks) > 500:
         return load_adif_parallel(text)
 
-    records: List[QSO] = []
-    for chunk in chunks:
-        qso = _process_adif_chunk(chunk)
-        if qso is not None:
-            records.append(qso)
+    # Use list comprehension with next() pattern for cleaner code
+    records: List[QSO] = [
+        qso for chunk in chunks if (qso := _process_adif_chunk(chunk)) is not None
+    ]
 
     return records
 

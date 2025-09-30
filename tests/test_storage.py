@@ -5,6 +5,8 @@ from w4gns_logger_ai.storage import (
     bulk_add_qsos,
     create_db_and_tables,
     delete_qso,
+    find_qso_by_frequency,
+    get_first_qso_by_call,
     get_qso,
     list_qsos,
     search_qsos,
@@ -118,3 +120,85 @@ def test_bulk_operations(tmp_path):
             os.environ["W4GNS_DB_PATH"] = original_db_path
         elif "W4GNS_DB_PATH" in os.environ:
             del os.environ["W4GNS_DB_PATH"]
+
+
+def test_next_function_helpers(tmp_path):
+    """Test new helper functions using next() for efficient queries."""
+    import os
+    from datetime import datetime
+
+    # Use temporary database for testing
+    original_db_path = os.environ.get("W4GNS_DB_PATH")
+    os.environ["W4GNS_DB_PATH"] = str(tmp_path / "test_next.sqlite3")
+
+    try:
+        # Create tables
+        create_db_and_tables()
+
+        # Add test QSOs
+        add_qso(
+            QSO(
+                call="W1ABC",
+                start_at=datetime(2024, 1, 1, 10, 0, 0),
+                band="20m",
+                mode="SSB",
+                freq_mhz=14.250,
+            )
+        )
+        add_qso(
+            QSO(
+                call="K2XYZ",
+                start_at=datetime(2024, 1, 2, 11, 0, 0),
+                band="40m",
+                mode="CW",
+                freq_mhz=7.050,
+            )
+        )
+        add_qso(
+            QSO(
+                call="W1DEF",
+                start_at=datetime(2024, 1, 3, 12, 0, 0),
+                band="20m",
+                mode="FT8",
+                freq_mhz=14.074,
+            )
+        )
+
+        # Test get_first_qso_by_call - finds first W1 callsign
+        result = get_first_qso_by_call("W1")
+        assert result is not None
+        # Should get most recent W1 (W1DEF is later than W1ABC)
+        assert result.call == "W1DEF"
+
+        # Test with exact call
+        result = get_first_qso_by_call("K2XYZ")
+        assert result is not None
+        assert result.call == "K2XYZ"
+
+        # Test with non-existent call
+        result = get_first_qso_by_call("ZZ9ZZZ")
+        assert result is None
+
+        # Test find_qso_by_frequency
+        result = find_qso_by_frequency(14.250, tolerance=0.001)
+        assert result is not None
+        assert result.call == "W1ABC"
+        assert result.freq_mhz == 14.250
+
+        # Test with broader tolerance
+        result = find_qso_by_frequency(14.000, tolerance=0.100)
+        assert result is not None
+        # Should find W1DEF at 14.074 (most recent within range)
+        assert result.call == "W1DEF"
+
+        # Test with frequency not in database
+        result = find_qso_by_frequency(21.000, tolerance=0.001)
+        assert result is None
+
+    finally:
+        # Cleanup environment
+        if original_db_path:
+            os.environ["W4GNS_DB_PATH"] = original_db_path
+        elif "W4GNS_DB_PATH" in os.environ:
+            del os.environ["W4GNS_DB_PATH"]
+

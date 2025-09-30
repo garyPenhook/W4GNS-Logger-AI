@@ -309,6 +309,7 @@ def suggest_awards(summary: AwardsSummary) -> List[str]:
     """Generate simple, readable suggestions based on thresholds and current counts.
 
     Handles missing or invalid summary data gracefully.
+    Uses next() for finding first applicable award suggestions.
     """
     try:
         thresholds = get_award_thresholds()

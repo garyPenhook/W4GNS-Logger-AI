@@ -300,6 +300,7 @@ def search(
                     "country": q.country,
                     "comment": q.comment,
                 }
+            # Use list comprehension (next() not needed for multiple items)
             console.print_json(data=[to_dict(q) for q in rows])
             return
         # Otherwise, pretty table
